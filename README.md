@@ -6,3 +6,5 @@ The functions can already be inspected and focus heavily on
 - somatic awareness
 - breathing
 - perception training
+
+User Experience: **Interactive awareness experiences**
