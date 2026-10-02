@@ -1,25 +1,41 @@
-# FeelAnything — Product Vision
+# FeelAnything — Guided Somatic Practice
 
-## Product direction
-FeelAnything is a private, immersive Android app for short sensory rituals: changing the atmosphere of a room, focusing attention on the body, and symbolically releasing something. Its personality is mysterious, tactile, and expressive. It should invite exploration without requiring an account or a tutorial.
+## Product purpose
+This is the somatic practice companion to the owner's existing reflection and identity-building app. It should teach and walk people through practical skills drawn from the owner's lived experience of trauma recovery, self-love, self-management, and self-authorship. It must translate those ideas into concrete, voluntary practice rather than another reflection journal or a collection of esoteric effects.
 
-The owner confirmed this direction on 2026-10-02. Preserve and refine these three experiences. FeelAnything is the project name; changing the visible Eso1 brand is a separate product decision.
+The owner's clarification on 2026-10-02 supersedes the earlier sensory-ritual brief. Vibrant, Mannequin, and Ascension are existing prototype screens, not mandatory launch features. They may be replaced when an approved practice flow is ready. FeelY appears in the owner's wider concept; the final displayed brand and relationship between products are not yet settled.
 
-## Audience and promise
-For people drawn to atmospheric, esoteric experiences who want a brief, self-directed moment of attention. The promise is an engaging sensory experience. Ritual language is welcome; do not represent animations or camera overlays as measurements, verified spirit detection, medical treatment, or guaranteed physical effects.
+## Founding principle
+Return authority to the person. Help them gain clarity, make their own choices, and eventually need the app less. Do not position the app or its creator as an authority to obey. Avoid dependency, shame, coercive streaks, diagnostic labels, or claims that every user will reproduce the founder's outcome.
 
-## Essential journeys
-- Home: immediately understand and open each of the three experiences; return predictably.
-- Vibrant: start and stop a responsive audiovisual ritual; adjust intensity, tone, and speed with perceptible feedback. Stop sound when leaving, backgrounding, or losing audio focus. Never start unexpected sound automatically.
-- Mannequin: explore the body and read meaningful symbolic prompts. Every region must also be reachable through accessible controls; visual hit targets must match the drawing.
-- Ascension: choose optional live camera or a complete simulated experience; move through scan, lock, naming, release, completion, and restart. Explain camera use before requesting it. Denial, dismissal, or missing camera must leave a usable journey. Never record or upload camera content.
+## Intended learning outcomes
+- Self-kindness and a sense of worth that do not depend on achievement or approval.
+- Noticing bodily experience and choosing a manageable response rather than forcing a particular feeling.
+- Self-authorship: choosing a small action even when doubt or shame is present.
+- Self-management: recognizing limits, strengths, needs, boundaries, and appropriate support.
+- Social discernment: separating observable behavior from interpretation; noticing concerning patterns while allowing uncertainty about another person's intentions.
+- Applying these skills in relationships, work, ambition, and leadership without making career success the measure of healing.
 
-## Design ambition
-Create a coherent dark visual language with deliberate typography, generous spacing, restrained luminous accents, and motion that supports the ritual. Give each experience its own character without making navigation inconsistent. Use commercial-quality composition and clear action hierarchy, not decorative clutter or a generic settings dashboard. Controls must remain discoverable and readable over animated or camera backgrounds.
+The founder's statements about panic, detecting hate, reading intentions, and judging competence are autobiographical source material. Do not turn them into universal truths, infallible detection features, diagnoses, or promises to eliminate panic. The parenting aspiration belongs to the wider vision; child-facing exercises and parenting instruction are outside the first adult practice release.
 
-Judge the actual rendered screens. Refine weak layouts substantially; preserving prototype code is not a goal. Respect system insets, compact screens, large text, accessibility services, and reduced-motion needs. Never trade legibility or control for atmosphere.
+## Core practice journey
+1. Choose a skill or an immediate intention in plain language.
+2. Understand what the practice invites, how long it takes, and available alternatives before starting.
+3. Follow one clear, concrete step at a time at a self-chosen pace. Keep pause, skip, and exit available.
+4. End intentionally, with an optional brief observation and one small self-chosen real-world action. Reporting improvement must never be required.
+5. Return later without penalties or pressure. Reflection supports the practice; it must not duplicate the separate identity-building product.
 
-## Scope and autonomy
-Agents may redesign screens, navigation, state handling, animation, and internal architecture within the current task. Prefer a small, complete experience over adding more modes. No accounts, analytics, cloud backend, subscriptions, ads, social features, or new permissions without an explicit product decision. Dependencies need a concrete benefit and must not introduce paid services or unnecessary data collection.
+## Content gate — still awaiting the owner's practice sequence
+The supplied notes and images establish philosophy and desired skills, but do not specify a bodily exercise. Before implementing the first somatic session, obtain one concrete owner-provided practice: actions, pacing/duration, alternatives, and how to stop/finish. Do not invent a trauma-treatment protocol or silently repurpose the ghost/camera ritual as one. Infrastructure, accessibility, navigation, and generic session mechanics can progress independently.
 
-Ask the owner when a choice changes the product promise or brand, requires credentials or spending, or involves publication. Make routine design and engineering decisions independently. Task completion is not launch approval.
+Clearly distinguish lived-experience teaching from clinical claims. Any future claim of treatment effectiveness or clinical suitability needs appropriate evidence and review before publication. Do not describe a technical reviewer PASS as clinical validation.
+
+## Experience and design
+The experience should feel grounded, warm, clear, respectful, and deliberately designed. Prioritize readable instructions, visible choice, and predictable navigation. Avoid supernatural measurement claims, overstimulating motion, surprise sounds, or obligatory eyes-closed/breath-control interactions. Let the confirmed exercise drive visuals and interaction; do not impose the prototype's visual theme as a product requirement.
+
+Use accessible controls, adaptable type, system insets, and appropriate motion/audio options. Sensitive personal observations should be optional and private. Start with no account, analytics, cloud backend, recording, or new permissions. Persisting personal practice data requires an explicit retention/deletion design.
+
+## Autonomy and boundaries
+Agents may substantially redesign or replace prototype code within an explicit current task. Optimize for complete, useful practice rather than feature count. Preserve unrelated work and keep changes reviewable.
+
+Ask the owner for missing exercise content, material product/brand decisions, credentials, spending, or publication. Routine engineering choices are autonomous. Never publish, sign a store release, or treat task completion as launch approval.

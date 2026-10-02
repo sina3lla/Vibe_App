@@ -9,3 +9,6 @@ The orchestrator runs Gradle and emulator QA. In restricted headless mode you ha
 Only modify app source/resources/tests for an app task. Do not edit Gradle configuration, wrapper, orchestrator, instructions, review evidence, Git metadata, credential files, or permission settings. If those changes are necessary, report BLOCKED with a concrete reason. Never commit, push, publish, sign releases, buy services, use production credentials, or access unrelated personal files.
 
 When Codex returns FIX, resolve each valid finding and explain any disagreement with evidence. When it returns PASS, provide a handoff without inventing new work. Stop on credentials, spending, publication, material product ambiguity, or unavailable permissions. Routine engineering choices do not need owner approval.
+
+## Product clarification
+The owner clarified that this is a guided somatic practice companion to an existing reflection/identity app. The old three-experience prototype is not the product specification. Read the current vision; do not invent bodily exercises or treatment protocols while its content gate is unresolved. Navigation/setup tasks may proceed independently.

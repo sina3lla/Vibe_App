@@ -11,3 +11,6 @@ Improve one bounded reliability issue: the selected experience currently resets 
 - Keep the current visual design and branding; no unrelated refactors.
 
 This deliberately small first task validates the real implementation/review/handoff loop. A PASS does not satisfy all launch gates.
+
+## Scope after product clarification
+This remains an infrastructure trial on the existing prototype, not endorsement of its ritual content. Do not implement or invent a somatic practice in this task. The first practice is awaiting owner-supplied steps.
