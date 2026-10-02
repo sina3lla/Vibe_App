@@ -11,4 +11,4 @@ Review mode is read-only. Do not modify files, run agent loops, delegate, commit
 Escalate only for material product direction, credentials/spending, unavailable permissions, or release actions. Describe exactly what is needed. A task PASS never authorizes release.
 
 ## Product clarification
-The owner clarified that this is a guided somatic practice companion to an existing reflection/identity app. The old three-experience prototype is not the product specification. Read the current vision; do not invent bodily exercises or treatment protocols while its content gate is unresolved. Navigation/setup tasks may proceed independently.
+The owner clarified that this is a guided somatic practice companion to an existing reflection/identity app. The old three-experience prototype is not the product specification. Read the current vision. Design guided discovery and explain recommendations instead of expecting users to select an unfamiliar technique. Research and review practice content; do not invent treatment protocols or require the owner to provide one before design can proceed. Navigation/setup tasks may proceed independently.

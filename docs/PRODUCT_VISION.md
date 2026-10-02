@@ -18,24 +18,43 @@ Return authority to the person. Help them gain clarity, make their own choices, 
 
 The founder's statements about panic, detecting hate, reading intentions, and judging competence are autobiographical source material. Do not turn them into universal truths, infallible detection features, diagnoses, or promises to eliminate panic. The parenting aspiration belongs to the wider vision; child-facing exercises and parenting instruction are outside the first adult practice release.
 
-## Core practice journey
-1. Choose a skill or an immediate intention in plain language.
-2. Understand what the practice invites, how long it takes, and available alternatives before starting.
-3. Follow one clear, concrete step at a time at a self-chosen pace. Keep pause, skip, and exit available.
-4. End intentionally, with an optional brief observation and one small self-chosen real-world action. Reporting improvement must never be required.
-5. Return later without penalties or pressure. Reflection supports the practice; it must not duplicate the separate identity-building product.
+## Guided entry and practice journey
+The app must help people discover a useful starting point. Do not require them to choose a technique, name a body state, or already know what is good for them.
 
-## Content gate — still awaiting the owner's practice sequence
-The supplied notes and images establish philosophy and desired skills, but do not specify a bodily exercise. Before implementing the first somatic session, obtain one concrete owner-provided practice: actions, pacing/duration, alternatives, and how to stop/finish. Do not invent a trauma-treatment protocol or silently repurpose the ghost/camera ritual as one. Infrastructure, accessibility, navigation, and generic session mechanics can progress independently.
+1. Ask a few plain-language questions about the present situation and desired support. Offer approachable answers such as “I feel wound up,” “I feel disconnected,” “Something happened with someone,” “I’m holding myself back,” and “I’m not sure.” These are descriptions, not diagnoses.
+2. Ask only follow-up questions that change the recommendation, including available time and preferences such as sound, movement, or remaining seated. Let the user skip or change an answer.
+3. Suggest one suitable practice from a reviewed content library. Explain the connection to their answers, what they will actually do, approximate duration, and what it may help them explore. Set realistic expectations before starting; never promise a specific feeling or outcome.
+4. Offer a different suggestion or the option to browse. Guidance should reduce the burden of choosing while preserving control.
+5. Guide one concrete step at a time with visible pause, skip, alternatives, and exit. Supply enough explanation to understand the purpose of each step without overwhelming the practice.
+6. Ask an optional neutral check-in afterward: helpful, no change, uncomfortable, or unsure. Adapt the next suggestion; do not interpret no change as user failure or automatically prescribe a more intense practice.
+7. End with an optional small real-world action. Returning is welcome, not a streak obligation. Brief reflection supports practice and does not duplicate the separate identity product.
 
-Clearly distinguish lived-experience teaching from clinical claims. Any future claim of treatment effectiveness or clinical suitability needs appropriate evidence and review before publication. Do not describe a technical reviewer PASS as clinical validation.
+## Content and recommendation design
+The team is responsible for designing this guided experience; the owner is not required to invent a bodily protocol before design work proceeds. The supplied notes establish philosophy and desired skills, not a clinical exercise library.
+
+Design the entry questions, matching rules, explanation cards, session mechanics, and feedback paths. Begin with simple, inspectable recommendation rules and a small curated library rather than an opaque diagnostic score or unconstrained generation of personal treatment. “I’m not sure” must lead to a useful, low-demand starting option, not a dead end.
+
+Before presenting actual practice instructions as ready for users, document each practice’s source, intended use, limitations, alternatives, and exit behavior. Research and review the content appropriately; do not invent trauma-treatment claims or silently relabel the ghost/camera ritual as therapy. The user's lived experience informs tone and goals; it is not evidence that a practice works for everyone.
+
+Clearly distinguish lived-experience teaching from clinical claims. Any future claim of treatment effectiveness or clinical suitability needs appropriate evidence and review before publication. A technical reviewer PASS is not clinical validation. Content requiring specialist review can remain explicitly pending while interaction design and infrastructure progress.
 
 ## Experience and design
 The experience should feel grounded, warm, clear, respectful, and deliberately designed. Prioritize readable instructions, visible choice, and predictable navigation. Avoid supernatural measurement claims, overstimulating motion, surprise sounds, or obligatory eyes-closed/breath-control interactions. Let the confirmed exercise drive visuals and interaction; do not impose the prototype's visual theme as a product requirement.
 
-Use accessible controls, adaptable type, system insets, and appropriate motion/audio options. Sensitive personal observations should be optional and private. Start with no account, analytics, cloud backend, recording, or new permissions. Persisting personal practice data requires an explicit retention/deletion design.
+Use accessible controls, adaptable type, system insets, and appropriate motion/audio options. Sensitive personal observations should be optional and private. User login is required. Add only the authentication and account infrastructure necessary for the agreed scope; analytics, recording, and unrelated permissions remain out of scope. Persisting personal practice data requires an explicit retention/deletion design.
 
 ## Autonomy and boundaries
 Agents may substantially redesign or replace prototype code within an explicit current task. Optimize for complete, useful practice rather than feature count. Preserve unrelated work and keep changes reviewable.
 
-Ask the owner for missing exercise content, material product/brand decisions, credentials, spending, or publication. Routine engineering choices are autonomous. Never publish, sign a store release, or treat task completion as launch approval.
+Ask the owner for material product/brand decisions, credentials, spending, or publication; do not require the owner to supply a full exercise protocol to continue design. Routine engineering choices are autonomous. Never publish, sign a store release, or treat task completion as launch approval.
+
+## Account, language, and launch market
+Develop for European markets first, with English included. The initial European country/language list remains an explicit launch-scope decision; do not assume English-only coverage satisfies Europe-first.
+
+Require a language choice on first use, before language-dependent onboarding or legal acceptance. Device language may suggest a default but must not replace the user's choice. Offer a clearly discoverable language switch and remember the choice across restarts and authenticated sessions. User-selected language takes precedence over the device setting.
+
+Provide user login. Before granting authenticated app access, require explicit, unselected-by-default acceptance of the applicable Terms & Conditions (AGB), with accessible full text in the selected language. Record the accepted version and time against the account; a returning user with valid existing acceptance need not be asked to sign again at every login. Re-acceptance rules for changed terms must be specified. Do not equate acceptance of terms with optional marketing or other separate choices.
+
+Localize the complete user journey: login/recovery, onboarding, guided questions, recommendations, practice content, controls, feedback, errors, accessibility labels, notifications if any, account management, and legal screens. Any shipped audio requires matching language content. Avoid mixed-language fallback in a supported locale; fallback rules for unsupported locales must be deliberate and tested.
+
+See docs/PRODUCT_DECISIONS.md for confirmed requirements/open questions and docs/EXPERIENCE_CATALOG.md for the current experience concepts.
