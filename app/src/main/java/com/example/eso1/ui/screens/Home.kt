@@ -34,6 +34,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,7 +47,6 @@ private data class Experience(
     val title: String,
     val subtitle: String,
     val accent: Color,
-    val active: Boolean,
     val onClick: () -> Unit
 )
 
@@ -55,13 +57,9 @@ fun HomeScreen(
     onOpenAscension: () -> Unit
 ) {
     val experiences = listOf(
-        Experience("Vibrant", "Room frequency cleanser", Color(0xFF22D3EE), true, onOpenVibrant),
-        Experience("Mannequin", "Body map and chakra prompts", Color(0xFFFF4FA3), true, onOpenMannequin),
-        Experience("Ascension", "Camera ritual to send a ghost to light", Color(0xFFFFD166), true, onOpenAscension),
-        Experience("Aura Scanner", "Color field reflection", Color(0xFF8B5CF6), false) {},
-        Experience("Focus Tunnel", "Attention narrowing loop", Color(0xFF34D399), false) {},
-        Experience("Dream Chamber", "Night prompt generator", Color(0xFF60A5FA), false) {},
-        Experience("Energy Dial", "One-control state shift", Color(0xFFF97316), false) {}
+        Experience("Vibrant", "Room frequency cleanser", Color(0xFF22D3EE), onOpenVibrant),
+        Experience("Mannequin", "Body map and chakra prompts", Color(0xFFFF4FA3), onOpenMannequin),
+        Experience("Ascension", "Camera ritual to send a ghost to light", Color(0xFFFFD166), onOpenAscension)
     )
 
     val transition = rememberInfiniteTransition(label = "home")
@@ -127,6 +125,12 @@ fun HomeScreen(
                     color = Color(0xFFB7BBC8),
                     style = MaterialTheme.typography.bodyLarge
                 )
+                Text(
+                    text = "For reflection and atmosphere — not a scientific or medical claim.",
+                    color = Color(0xFF6B7080),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
@@ -143,7 +147,10 @@ private fun ExperienceCard(experience: Experience) {
         modifier = Modifier
             .fillMaxWidth()
             .height(106.dp)
-            .clickable(enabled = experience.active, onClick = experience.onClick),
+            .semantics(mergeDescendants = true) {
+                contentDescription = "${experience.title}. ${experience.subtitle}"
+            }
+            .clickable(onClick = experience.onClick),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xCC11131B))
     ) {
@@ -158,15 +165,16 @@ private fun ExperienceCard(experience: Experience) {
                 modifier = Modifier
                     .height(54.dp)
                     .weight(0.2f)
+                    .clearAndSetSemantics {}
             ) {
                 val center = Offset(size.width / 2f, size.height / 2f)
                 drawCircle(
-                    color = experience.accent.copy(alpha = if (experience.active) 0.28f else 0.08f),
+                    color = experience.accent.copy(alpha = 0.28f),
                     radius = size.minDimension * 0.45f,
                     center = center
                 )
                 drawCircle(
-                    color = experience.accent.copy(alpha = if (experience.active) 0.9f else 0.28f),
+                    color = experience.accent.copy(alpha = 0.9f),
                     radius = size.minDimension * 0.24f,
                     center = center,
                     style = Stroke(width = 2.dp.toPx())
@@ -175,19 +183,19 @@ private fun ExperienceCard(experience: Experience) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = experience.title,
-                    color = if (experience.active) Color.White else Color(0xFF727786),
+                    color = Color.White,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = experience.subtitle,
-                    color = if (experience.active) Color(0xFFB7BBC8) else Color(0xFF565B66),
+                    color = Color(0xFFB7BBC8),
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
             Text(
-                text = if (experience.active) "Open" else "Later",
-                color = if (experience.active) experience.accent else Color(0xFF555B66),
+                text = "Open",
+                color = experience.accent,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold
             )

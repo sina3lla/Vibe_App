@@ -25,7 +25,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
@@ -34,7 +37,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +53,8 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import kotlin.math.PI
 import kotlin.math.cos
@@ -81,6 +85,7 @@ fun AscensionScreen(onBack: () -> Unit) {
     ) { granted ->
         hasCameraPermission = granted
     }
+    var showCameraPrompt by remember { mutableStateOf(!hasCameraPermission) }
     var stage by remember { mutableStateOf(AscensionStage.Scan) }
     var sealTaps by remember { mutableStateOf(0) }
 
@@ -94,12 +99,6 @@ fun AscensionScreen(onBack: () -> Unit) {
         ),
         label = "phase"
     )
-
-    LaunchedEffect(Unit) {
-        if (!hasCameraPermission) {
-            permissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (hasCameraPermission) {
@@ -135,9 +134,9 @@ fun AscensionScreen(onBack: () -> Unit) {
                         context,
                         Manifest.permission.CAMERA
                     ) == PackageManager.PERMISSION_GRANTED
-                    if (!hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
+                    if (!hasCameraPermission) showCameraPrompt = true
                 }) {
-                    Text("Camera")
+                    Text(if (hasCameraPermission) "Camera on" else "Enable camera")
                 }
             }
 
@@ -165,6 +164,76 @@ fun AscensionScreen(onBack: () -> Unit) {
                     }
                 }
             )
+        }
+
+        if (showCameraPrompt && !hasCameraPermission) {
+            CameraRationalePrompt(
+                onEnableCamera = {
+                    showCameraPrompt = false
+                    permissionLauncher.launch(Manifest.permission.CAMERA)
+                },
+                onDismiss = { showCameraPrompt = false }
+            )
+        }
+    }
+}
+
+@Composable
+private fun CameraRationalePrompt(
+    onEnableCamera: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 28.dp)
+                .sizeIn(maxHeight = 420.dp)
+                .background(Color(0xFF11131B), RoundedCornerShape(16.dp))
+                .verticalScroll(rememberScrollState())
+                .padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                text = "Camera for the live ritual view",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Ascension overlays its seal and ghost marker on your room through the camera. " +
+                    "Nothing is recorded or saved — you can also run the rite with a simulated view instead.",
+                color = Color(0xFFD6DAE3),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onEnableCamera,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFFD166),
+                        contentColor = Color(0xFF171004)
+                    )
+                ) {
+                    Text("Enable camera", fontWeight = FontWeight.Black)
+                }
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Use simulated view")
+                }
+            }
         }
     }
 }

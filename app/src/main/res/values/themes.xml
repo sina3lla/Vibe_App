@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Eso1" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Eso1" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF050509</item>
+        <item name="android:colorBackground">#FF050509</item>
+    </style>
 </resources>

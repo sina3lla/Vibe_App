@@ -2,9 +2,16 @@ package com.example.eso1
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope.SlideDirection
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -23,9 +30,14 @@ import com.example.eso1.ui.theme.Eso1Theme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // App theme is dark-only; force light system-bar icons instead of
+        // letting enableEdgeToEdge() derive icon appearance from system night mode.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
         setContent {
-            Eso1Theme(dynamicColor = false) {
+            Eso1Theme {
                 EsoApp()
             }
         }
@@ -47,28 +59,49 @@ private fun EsoApp() {
         destination = EsoDestination.Home
     }
 
+    fun navigateTo(next: EsoDestination) {
+        destination = next
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = Color(0xFF050509)
     ) {
-        when (destination) {
-            EsoDestination.Home -> HomeScreen(
-                onOpenVibrant = { destination = EsoDestination.Vibrant },
-                onOpenMannequin = { destination = EsoDestination.Mannequin },
-                onOpenAscension = { destination = EsoDestination.Ascension }
-            )
+        AnimatedContent(
+            targetState = destination,
+            label = "destination",
+            transitionSpec = {
+                val enteringHome = targetState == EsoDestination.Home
+                val slideDirection = if (enteringHome) SlideDirection.End else SlideDirection.Start
+                (slideIntoContainer(
+                    towards = slideDirection,
+                    animationSpec = tween(320)
+                ) + fadeIn(tween(320))) togetherWith
+                    (slideOutOfContainer(
+                        towards = slideDirection,
+                        animationSpec = tween(320)
+                    ) + fadeOut(tween(220)))
+            }
+        ) { current ->
+            when (current) {
+                EsoDestination.Home -> HomeScreen(
+                    onOpenVibrant = { navigateTo(EsoDestination.Vibrant) },
+                    onOpenMannequin = { navigateTo(EsoDestination.Mannequin) },
+                    onOpenAscension = { navigateTo(EsoDestination.Ascension) }
+                )
 
-            EsoDestination.Vibrant -> VibrantScreen(
-                onBack = { destination = EsoDestination.Home }
-            )
+                EsoDestination.Vibrant -> VibrantScreen(
+                    onBack = { navigateTo(EsoDestination.Home) }
+                )
 
-            EsoDestination.Mannequin -> MannequinScreen(
-                onBack = { destination = EsoDestination.Home }
-            )
+                EsoDestination.Mannequin -> MannequinScreen(
+                    onBack = { navigateTo(EsoDestination.Home) }
+                )
 
-            EsoDestination.Ascension -> AscensionScreen(
-                onBack = { destination = EsoDestination.Home }
-            )
+                EsoDestination.Ascension -> AscensionScreen(
+                    onBack = { navigateTo(EsoDestination.Home) }
+                )
+            }
         }
     }
 }

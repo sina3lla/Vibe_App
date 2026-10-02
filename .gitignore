@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Local IDE and autonomous-run artifacts
+/.idea/
+/agent/runs/
+/agent/STOP
+__pycache__/
