@@ -17,7 +17,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,7 +53,7 @@ private enum class EsoDestination {
 
 @Composable
 private fun EsoApp() {
-    var destination by remember { mutableStateOf(EsoDestination.Home) }
+    var destination by rememberSaveable { mutableStateOf(EsoDestination.Home) }
 
     BackHandler(enabled = destination != EsoDestination.Home) {
         destination = EsoDestination.Home

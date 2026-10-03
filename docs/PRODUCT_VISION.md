@@ -1,60 +1,41 @@
-# FeelAnything — Guided Somatic Practice
+# Product Vision — a world for understanding your experience
 
-## Product purpose
-This is the somatic practice companion to the owner's existing reflection and identity-building app. It should teach and walk people through practical skills drawn from the owner's lived experience of trauma recovery, self-love, self-management, and self-authorship. It must translate those ideas into concrete, voluntary practice rather than another reflection journal or a collection of esoteric effects.
+## Purpose
+Create an interactive educational self-help companion to FeelY. FeelY supports conversations, journaling, reflection, and a personal map. This companion supports learning through exploration, attention, sensation, and interaction while the person remains connected to their present experience.
 
-The owner's clarification on 2026-10-02 supersedes the earlier sensory-ritual brief. Vibrant, Mannequin, and Ascension are existing prototype screens, not mandatory launch features. They may be replaced when an approved practice flow is ready. FeelY appears in the owner's wider concept; the final displayed brand and relationship between products are not yet settled.
+The owner describes the conceptual model as an open-world MMORPG: freedom to roam, discover relationships, revisit places, and become more capable through familiarity. This does not mandate multiplayer, combat, avatars, quests, a game engine, or a large 3D environment.
 
-## Founding principle
-Return authority to the person. Help them gain clarity, make their own choices, and eventually need the app less. Do not position the app or its creator as an authority to obey. Avoid dependency, shame, coercive streaks, diagnostic labels, or claims that every user will reproduce the founder's outcome.
+## The promise
+A person can enter without knowing a technique, follow something that resonates, and discover a useful way to understand what is happening. Learning does not require leaving the experience to watch a lesson or talk to a chatbot. Noticing something is a valid outcome; feeling better is not a required result.
 
-## Intended learning outcomes
-- Self-kindness and a sense of worth that do not depend on achievement or approval.
-- Noticing bodily experience and choosing a manageable response rather than forcing a particular feeling.
-- Self-authorship: choosing a small action even when doubt or shame is present.
-- Self-management: recognizing limits, strengths, needs, boundaries, and appropriate support.
-- Social discernment: separating observable behavior from interpretation; noticing concerning patterns while allowing uncertainty about another person's intentions.
-- Applying these skills in relationships, work, ambition, and leadership without making career success the measure of healing.
+## Confirmed creative direction
+- Exploration and interactive education are the primary experience.
+- No chatbot is needed, and educational videos are not the teaching format.
+- Brief optional explanations belong beside the interaction, at the moment they become useful.
+- The world may suggest where to look without prescribing a session or requiring a diagnostic intake.
+- Bodily sensations can inform exploration of wants and needs; they are not infallible answers.
+- Include room to explore mental crowding, scattered attention, and rising panic with a professionally considered, low-demand design.
+- Return interpretive authority to the person. The app never claims to know their hidden needs or another person's intentions.
 
-The founder's statements about panic, detecting hate, reading intentions, and judging competence are autobiographical source material. Do not turn them into universal truths, infallible detection features, diagnoses, or promises to eliminate panic. The parenting aspiration belongs to the wider vision; child-facing exercises and parenting instruction are outside the first adult practice release.
+## What makes the product worth paying for
+The craft of an intelligible world, meaningful interactive models, well-developed explanations, and connections people can revisit. Familiarity should increase independence. Sell access to a useful product, not a promised emotional transformation. Pricing and packaging remain open.
 
-## Guided entry and practice journey
-The app must help people discover a useful starting point. Do not require them to choose a technique, name a body state, or already know what is good for them.
+## Creative freedom
+Invent environments, visual metaphors, interactions, names, and navigation that serve this purpose. Build a coherent small world before expanding. A quiet abstract space, tactile illustrated environment, or architectural world are all legitimate proposals; none is prescribed. The prototype's esoteric screens and the old Prism design are not requirements.
 
-1. Ask a few plain-language questions about the present situation and desired support. Offer approachable answers such as “I feel wound up,” “I feel disconnected,” “Something happened with someone,” “I’m holding myself back,” and “I’m not sure.” These are descriptions, not diagnoses.
-2. Ask only follow-up questions that change the recommendation, including available time and preferences such as sound, movement, or remaining seated. Let the user skip or change an answer.
-3. Suggest one suitable practice from a reviewed content library. Explain the connection to their answers, what they will actually do, approximate duration, and what it may help them explore. Set realistic expectations before starting; never promise a specific feeling or outcome.
-4. Offer a different suggestion or the option to browse. Guidance should reduce the burden of choosing while preserving control.
-5. Guide one concrete step at a time with visible pause, skip, alternatives, and exit. Supply enough explanation to understand the purpose of each step without overwhelming the practice.
-6. Ask an optional neutral check-in afterward: helpful, no change, uncomfortable, or unsure. Adapt the next suggestion; do not interpret no change as user failure or automatically prescribe a more intense practice.
-7. End with an optional small real-world action. Returning is welcome, not a streak obligation. Brief reflection supports practice and does not duplicate the separate identity product.
+Maintain recognizable places and connections. Avoid reducing the world to a list of sessions with a decorative map. Do not require a rigid sequence, daily streak, competitive wellbeing score, or completion ritual. Optional hints and accessible navigation are compatible with freedom.
 
-## Content and recommendation design
-The team is responsible for designing this guided experience; the owner is not required to invent a bodily protocol before design work proceeds. The supplied notes establish philosophy and desired skills, not a clinical exercise library.
+## Truthfulness and scope
+The world is an educational model, not a sensor. A calmer animation must never be presented as evidence that the person's body has calmed. Explain the distinction between the model and the user's experience where it matters.
 
-Design the entry questions, matching rules, explanation cards, session mechanics, and feedback paths. Begin with simple, inspectable recommendation rules and a small curated library rather than an opaque diagnostic score or unconstrained generation of personal treatment. “I’m not sure” must lead to a useful, low-demand starting option, not a dead end.
+The founder's lived experience informs the questions and values; it does not establish universal efficacy. Self-help positioning must match the actual features and claims. Do not diagnose, prescribe trauma treatment, promise panic relief, or infer health from taps. Content about bodily or psychological mechanisms needs appropriate sources and review before release.
 
-Before presenting actual practice instructions as ready for users, document each practice’s source, intended use, limitations, alternatives, and exit behavior. Research and review the content appropriately; do not invent trauma-treatment claims or silently relabel the ghost/camera ritual as therapy. The user's lived experience informs tone and goals; it is not evidence that a practice works for everyone.
+The first prototype is an individual experience. Multiplayer, social comparison, child-facing content, live clinical services, AI inference, and FeelY data integration require explicit scope decisions. The companion should make sense independently; integration can be explored later.
 
-Clearly distinguish lived-experience teaching from clinical claims. Any future claim of treatment effectiveness or clinical suitability needs appropriate evidence and review before publication. A technical reviewer PASS is not clinical validation. Content requiring specialist review can remain explicitly pending while interaction design and infrastructure progress.
+## Continuing requirements
+Release includes login, explicit Terms & Conditions/AGB acceptance, a required language choice, and consistent localization throughout the app. Develop for European markets first with English included. The exact additional locales and countries are unresolved. These obligations remain release gates; they do not force a prototype to implement authentication before the core interaction can be evaluated.
 
-## Experience and design
-The experience should feel grounded, warm, clear, respectful, and deliberately designed. Prioritize readable instructions, visible choice, and predictable navigation. Avoid supernatural measurement claims, overstimulating motion, surprise sounds, or obligatory eyes-closed/breath-control interactions. Let the confirmed exercise drive visuals and interaction; do not impose the prototype's visual theme as a product requirement.
+## Appearance — confirmed owner requirement
+Provide two coherent color schemes: bright and dark. Default to following the phone's system appearance and adapt silently when it changes. Do not show an information box, popup, toast, or explanatory onboarding for this adaptation.
 
-Use accessible controls, adaptable type, system insets, and appropriate motion/audio options. Sensitive personal observations should be optional and private. User login is required. Add only the authentication and account infrastructure necessary for the agreed scope; analytics, recording, and unrelated permissions remain out of scope. Persisting personal practice data requires an explicit retention/deletion design.
-
-## Autonomy and boundaries
-Agents may substantially redesign or replace prototype code within an explicit current task. Optimize for complete, useful practice rather than feature count. Preserve unrelated work and keep changes reviewable.
-
-Ask the owner for material product/brand decisions, credentials, spending, or publication; do not require the owner to supply a full exercise protocol to continue design. Routine engineering choices are autonomous. Never publish, sign a store release, or treat task completion as launch approval.
-
-## Account, language, and launch market
-Develop for European markets first, with English included. The initial European country/language list remains an explicit launch-scope decision; do not assume English-only coverage satisfies Europe-first.
-
-Require a language choice on first use, before language-dependent onboarding or legal acceptance. Device language may suggest a default but must not replace the user's choice. Offer a clearly discoverable language switch and remember the choice across restarts and authenticated sessions. User-selected language takes precedence over the device setting.
-
-Provide user login. Before granting authenticated app access, require explicit, unselected-by-default acceptance of the applicable Terms & Conditions (AGB), with accessible full text in the selected language. Record the accepted version and time against the account; a returning user with valid existing acceptance need not be asked to sign again at every login. Re-acceptance rules for changed terms must be specified. Do not equate acceptance of terms with optional marketing or other separate choices.
-
-Localize the complete user journey: login/recovery, onboarding, guided questions, recommendations, practice content, controls, feedback, errors, accessibility labels, notifications if any, account management, and legal screens. Any shipped audio requires matching language content. Avoid mixed-language fallback in a supported locale; fallback rules for unsupported locales must be deliberate and tested.
-
-See docs/PRODUCT_DECISIONS.md for confirmed requirements/open questions and docs/EXPERIENCE_CATALOG.md for the current experience concepts.
+Settings includes **Design: System, Bright, Dark**. System follows the device; Bright and Dark override it until the user changes the setting. Persist the choice across app restarts. Both schemes express the same world and retain the same functionality. Localize these setting labels with the rest of the interface.

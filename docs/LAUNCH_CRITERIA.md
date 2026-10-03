@@ -1,59 +1,61 @@
-# Launch Criteria
+# Quality Gates — prototype and release
 
-A PASS on one task does not mean launch-ready. Record evidence for every gate below; missing evidence is NOT VERIFIED, never an implicit pass.
+Status: draft. The product direction is established; the release scope still needs a finite content and locale list. Missing evidence is NOT VERIFIED, never a pass. These are product requirements, not a legal-compliance certification.
 
-## Build and reliability
-- `./gradlew assembleDebug test lintDebug assembleRelease` succeeds at the reviewed revision.
-- Core navigation and every approved practice journey complete without crashes or dead ends.
-- Meaningful tests cover ritual transitions, relevant state restoration, and regressions; sample arithmetic tests do not establish coverage.
-- Backgrounding, return, rotation, and process recreation have explicit verified behavior. Audio and camera release correctly; no unexpected restart of sound.
+## A. Prototype task gate
+Apply only the current task's bounded acceptance criteria plus these essentials:
+- The playable interaction works, its educational purpose is understandable, and the visitor has meaningful choice.
+- The actual screen implements exploration, not a disguised linear session, chatbot, video course, or static explanation gallery.
+- Model behavior is not presented as measurement of the user's body or mind.
+- Back/exit works; necessary controls remain available with reduced motion, large text, and an accessible alternative to spatial gestures.
+- Relevant build, tests, lint, interaction checks, and fresh visual evidence pass for the changed artifact. A mockup is labeled as such and cannot stand in for a tested APK.
+- No evidence or test results are invented. Evidence reflects the current revision.
 
-## Product completeness
-- At least one appropriately sourced and reviewed practice is implemented end to end: guided entry, explained recommendation, informed start, paced steps, pause/skip/exit, intentional finish, and optional feedback. A user who does not know which exercise to choose can complete the journey.
-- Every visible control works and gives feedback. Relevant empty, error, loading, and success states are intentional.
-- No placeholder exercise content, unsupported treatment claims, or certainty about hidden intentions. Founder experience is distinguished from a universal promise. No retained prototype feature conflicts with the approved purpose.
+Login, complete translation coverage, payment integration, and the full world are not prerequisites for an internal interaction prototype unless its task specifically addresses them.
 
-## Visual and interaction quality
-- Fresh screenshots from the built APK cover the approved practice journey, including choice, instructions, active step, pause/exit, and completion. Current prototype screenshots validate infrastructure only; they do not satisfy this launch gate.
-- Review normal portrait, compact 320–360 dp width, landscape, and 200% font size. No clipping, inaccessible actions, overlap with system UI, or illegible text on moving backgrounds.
-- Verify light and dark system themes with the chosen app palette; inspect gesture and three-button navigation.
-- Spacing, type, colors, control states, and motion form one deliberate design language. Review screenshots directly, not only source code.
-- Back dismisses dialogs before navigating; essential controls are reachable without precise tapping or motion.
+## B. Release scope and product quality
+- Agree a finite release map and encounter list. Every included encounter has a complete content record, useful interactions, accurate explanations, and clear exit behavior.
+- People can enter, discover an interaction, understand its purpose, move elsewhere, leave, and return. Optional navigation help does not require identifying a diagnosis or choosing a technique.
+- Observe representative people using the app without continuous coaching. Record misunderstandings and resolve issues that prevent understanding or choice. Usage observation is not evidence of therapeutic benefit.
+- No dead controls, unexplained gates, filler environments, mandatory emotional improvement, or rewards for reporting distress.
+- Screenshots and interaction recordings cover entry, exploration, explanations, alternatives, exits, and return. Inspect more than still imagery: sequence, responsiveness, and discoverability matter.
 
-## Accessibility, privacy, and performance
-- Screen-reader labels, focus order, meaningful state announcements, and accessible alternatives to canvas hotspots work. Verify touch targets and readable contrast.
-- No unnecessary camera or microphone access. Any retained camera remains optional and local. No recording, upload, secrets, signing keys, or production data in the repo. Optional sensitive observations have explicit retention and deletion behavior.
-- Audio volume and interruption behavior are controlled. Core interactions stay responsive; inspect startup and sustained animation on an emulator and a physical device before release.
+## C. Reliability and accessibility
+- Debug/release builds, unit tests, lint, and relevant connected Android tests pass at the release revision. Tests cover actual behavior, not sample arithmetic.
+- Navigation, selection, saved discoveries, activity/process recreation, backgrounding, and resumption behave intentionally. Sound never restarts unexpectedly.
+- Check compact phones, supported orientations, 200% text, system insets, supported app themes, and both gesture and three-button navigation. Define unsupported orientations explicitly.
+- TalkBack order, labels, state feedback, usable contrast/touch targets, and non-spatial alternatives are verified. Motion/audio can be reduced or disabled without losing core learning.
+- Verify startup and sustained interactions on a physical device as well as the emulator. Set and document measurable performance budgets for the actual world before release.
 
-## Evidence and release boundary
-Maintain a launch checklist with gate, device/configuration, command or journey, result, and evidence path. Automated screenshots establish only the states they actually exercised. TalkBack, physical-device performance, camera hardware behavior, and the full configuration matrix remain open until specifically verified.
+## D. Content and agency
+- Factual psychological/body explanations have documented sources and appropriate review; simplified metaphors disclose their limits where relevant.
+- No diagnostic conclusions, guaranteed calm, inferred hidden motives, or claims of trauma treatment. Calling the product self-help does not excuse unsupported claims.
+- Panic-related content has appropriate review, a usable stop/support route, and does not assume unfamiliar symptoms are necessarily panic. Do not manufacture distress to demonstrate a mechanism.
+- The person can disagree, ignore, or leave. Personal observations are optional. Technical PASS is not clinical validation.
 
-Codex returns task PASS only when the task's acceptance criteria and required checks pass. Final launch review covers this entire document. Release signing, store upload, purchase, deployment, and public claims require owner action; the autonomous loop never performs them.
+## E. Account and AGB — confirmed release requirements
+- Login, sign-out, recovery appropriate to the chosen method, expired-session and error states work.
+- Before authenticated product access, explicit unselected-by-default acceptance of applicable Terms & Conditions/AGB is required. The full terms are available in the selected language first; declining is not acceptance.
+- Record account, accepted terms version, time, and presented language. Restored sessions and another device cannot bypass required acceptance. Valid existing acceptance avoids repeated signing on every login.
+- Define and test changed-terms/re-acceptance behavior. “Sign” currently means affirmative acceptance; no special signature technology has been selected.
+- Legal text and translations are reviewed for the chosen markets. Privacy information is distinct; optional marketing is not bundled into terms acceptance.
+- Define secure authentication handling, minimum account data, retention, deletion, and any cross-device synchronization. No credentials or sensitive observations in diagnostic logs.
 
-## Agency and content review
-- The user can decline, pause, skip, or stop a practice without shame, pressure, or loss of standing. Completion never requires claiming to feel better.
-- No infallible manipulation/hate detector, guaranteed calm, or implied diagnostic assessment. Social examples distinguish observations, interpretations, and choices.
-- The owner reviews fidelity to the product purpose; practice content has documented sources, limitations, alternatives, and appropriate review. Technical review does not certify therapeutic effectiveness or safety. Clinical claims, if proposed, receive appropriate evidence and specialist review before release.
-- Child-facing and parenting-specific content is excluded from this first adult release.
+## F. Language and Europe-first release — confirmed requirements
+- Agree initial European countries and a complete supported-language matrix; include English. Do not invent approval for German or other locales.
+- Require a supported-language choice before onboarding/legal acceptance. A device-language suggestion does not replace user choice. Provide later switching and remember the preference.
+- Localize the entire shipped app: world labels, explanations, interaction feedback, accessibility text, authentication, settings, legal pages, errors, and any audio/notifications.
+- Test each supported locale through account creation/login, AGB decisions, exploration, switching, restart, and account recovery. Verify text expansion and locale formatting.
+- Missing supported-locale translations block release. Define fallback for unsupported languages and cross-device preference behavior.
 
-## Guided recommendation quality
-- Every entry answer, including “I’m not sure,” has an understandable path. Recommendation rules are inspectable and tested.
-- Suggested practices explain why they fit, what the user will do, duration, and realistic expectations before starting. Users can choose an alternative.
-- No-change, discomfort, and unsure feedback produce respectful next steps without blame, pressure, or automatic escalation of intensity.
+## G. Release decision
+Maintain gate, revision, device/locale, evidence, result, and outstanding issues. Owner confirms product/market scope and public release. Store publication, signing, purchases, external services, and production credentials are outside the autonomous development loop. Monetization is a separate decision; if introduced, add its flow-specific criteria before release.
 
-## Authentication and Terms & Conditions (AGB)
-- User login is implemented, including appropriate recovery, sign-out, expired-session, cancellation, network-failure, and invalid-input states for the selected login method.
-- Before authenticated access, the user explicitly accepts the applicable AGB. The acceptance control is not preselected; the full terms are readable and available in the selected language before acceptance. Declining must not count as acceptance.
-- Acceptance records are associated with the account and include terms version, acceptance timestamp, and presented language. Session restoration or another device cannot bypass the acceptance gate. Valid existing acceptance avoids unnecessary repeated prompts.
-- Changed terms and re-acceptance behavior are specified and tested. Legal text is versioned and reviewed for the selected launch markets; an agent-generated draft alone does not satisfy launch readiness.
-- Privacy information is accessible and distinct from AGB acceptance. Optional permissions/marketing choices are not silently bundled into acceptance.
-- Authentication credentials and tokens are handled securely; account-data retention and deletion behavior are defined and tested. No raw secrets in logs or source control.
-
-## Language and European launch scope
-- A finite launch-country and supported-language matrix is agreed and recorded before launch. English is required; other European launch languages must be explicitly named.
-- On first use, the user must choose a supported language before onboarding/terms. The choice persists across restarts and authenticated sessions and can be changed in settings. Cross-device preference behavior is defined and tested.
-- Every supported language covers the entire shipped app: authentication, recovery, guided entry, recommendations, practices, feedback, settings, errors, accessibility labels, any notifications/audio, and legal screens.
-- UI and practice content update consistently after a language change. No hard-coded prototype text or unintended mixed-language content remains in supported locales. Formatting and plurals respect the selected locale.
-- Test each supported locale end to end, including login, AGB decline/accept/re-accept, practice completion, language switching, relaunch, and sign-out/sign-in. Verify text expansion, large fonts, accents, and relevant scripts without clipping.
-- Missing translations fail the release content check; unsupported-device-language fallback is explicit and tested. Each legal translation maps to the applicable terms version.
-- European launch readiness includes documented review of the actual account/data practices and product claims for the chosen markets. This checklist is a product requirement, not a claim of legal compliance.
+## H. Appearance — confirmed requirement
+- Two complete schemes, Bright and Dark, cover all shipped surfaces and interaction states, including the explorable environment and system bars.
+- First use defaults to System. While System is selected, a device appearance change updates the app without restarting it or interrupting the current interaction.
+- Settings exposes Design with System, Bright, and Dark choices. Explicit Bright/Dark overrides ignore device-theme changes; returning to System applies the current device appearance immediately.
+- Persist the preference across app restarts. Changing appearance preserves navigation and interaction state.
+- No information box, popup, toast, or onboarding message accompanies automatic appearance changes.
+- Verify contrast, legibility, selected/disabled states, and system-bar icons in both schemes. Localize the setting and its choices; expose the selected choice accessibly.
+- Test the System/Bright/Dark preference against both device modes, live system changes, overrides, return to System, and relaunch. Capture fresh evidence for both schemes.
