@@ -1,31 +1,17 @@
-# Proposed Task — first playable encounter
+# Current Task — build the complete explorable app core
 
-Status: concept approved for a reversible prototype. Before execution, complete the controller/QA prerequisites in docs/IMPLEMENTATION_BRIEF.md. Appearance requirements are approved. No loop is started by saving this task.
+Owner authorized the FULL BUILD, not a prototype-only stop. This milestone implements the complete offline product while provider/language decisions are obtained. Read docs/BUILD_PLAN.md, PRODUCT_VISION, WORLD_DESIGN, CREATIVE_PROCESS, and LAUNCH_CRITERIA.
 
-## Outcome
-Create a small explorable Android space where a person can discover a distinction between competing demands for attention and their own choice of focus. Make it useful to someone experiencing mental crowding without claiming to treat panic.
+## Build now
+Replace the old three-ritual home with an original, polished spatial world and connected places. No hidden prototype entry. Create five territories: Attention (competing signals / urgency versus importance), Wants & Needs (desire/obligation/uncertainty as hypotheses), Boundaries (distance and permission), Perspective (observation/interpretation/response), Rest & Ambition (capacity and chosen pace). At least two meaningful independently usable interactions per territory, with clear feedback and optional short explanations. Interactions must differ substantively, not five copies of the same slider. No forced sequence, quizzes, guaranteed benefit, or mandatory emotional disclosure. Learn by changing/comparing models, with visible limits.
 
-## Creative brief
-Use the competing-signals concept in WORLD_DESIGN as a starting hypothesis. Choose the actual metaphor, composition, interaction, and wording. Build one coherent interpretation, not a menu of variants. The user must be able to explore in different orders, linger, and leave. Do not require a chatbot, video, intake questionnaire, or prescribed session sequence.
+Design a visually coherent environment with a distinctive spatial map and tactile interactive scenes. Keep accessible text navigation as an alternative. No chatbot, videos, game engine, dependency changes, web services, or fabricated therapy efficacy. Use existing Compose APIs. Keep old unused source only if needed to avoid unrelated work; remove camera permission if no reachable feature needs it.
 
-Target a contained implementation using the existing Android stack. Do not introduce a game engine, backend, account integration, or new dependencies in this slice. Login/AGB/localization remain release obligations; keep display strings externalized for later translation. Preserve existing routes and unrelated uncommitted work until a separate task authorizes replacement. Place the slice behind a clear local prototype entry.
+Required app functionality: first-run language selection; English plus German as a reversible provisional build locale if no later owner response (do not describe this as confirmed launch scope); all NEW strings localized consistently via Android resources; live System/Bright/Dark appearance, default System, persisted preference, no notifications; reduce-motion/quiet setting; local saved discoveries with explicit remove and confirmed erase-all; a world map, discoveries, and settings navigation; back and activity restoration; system-bar contrast and safe insets; offline operation. Persist non-sensitive interaction choices and bookmarks. No freeform personal journal or analytics.
 
-## Acceptance criteria
-- An understandable entry leads into a coherent small environment with at least two independently reachable interactions; visiting one never requires completing the other.
-- Each interaction helps illustrate a concrete distinction. At least one allows comparison between two choices with a comprehensible model response.
-- Brief optional explanatory text appears in context, can be dismissed, and does not claim to measure or change the user's internal state.
-- A persistent exit, a quieter/reduced-motion presentation, and accessible non-drag controls work. Core functionality does not depend on audio.
-- The first frame does not manufacture overload. No flashing, alarms, countdowns, distress scores, required emotional reports, or simulated therapeutic success.
-- Leaving and returning, Back, and activity recreation preserve or reset state intentionally. Add meaningful regression coverage for navigation and chosen-state behavior.
-- Relevant debug build, unit tests, lint, connected tests, and the updated emulator journey pass. Fresh evidence shows initial entry, both interactions, explanation open/dismissed, quiet mode, exit, and return.
+Account requirement: expose a truthful Account screen explaining sign-in is not connected yet, with no pretend successful login and no password collection. The offline exploration is explicitly a local preview until production account/terms integration is completed in a subsequent milestone. Put draft terms/privacy access in settings, marked clearly as draft, no fake acceptance record. This is an implementation boundary, not permission to omit final login.
 
-## Handoff
-Explain the design hypothesis and what the visitor can learn. Provide evidence references, remaining limitations, and up to three useful questions for owner feedback. Do not treat absent taste feedback as rejection or approval. Do not start a second territory automatically.
+Add meaningful JVM tests for any pure model rules and Compose instrumentation tests for first-run language, independent territories, settings persistence, navigation/recreation, and saved discoveries/removal. Existing navigation test must be updated for the new real home; do not simply delete regression coverage. Expose stable Compose test tags via semantics testTagsAsResourceId for controller screenshot navigation, e.g. world-map, territory-attention, territory-needs, territory-boundaries, territory-perspective, territory-rest, nav-world, nav-discoveries, nav-settings, language-en, language-de, design-system, design-bright, design-dark, quiet-toggle, back.
 
-## Definition of done
-A playable candidate ready to react to. It need not be the final aesthetic, full world, clinically validated intervention, or sellable release. Task PASS confirms this slice only.
-
-## Appearance requirement added before implementation
-Include both Bright and Dark schemes in this first playable slice. Follow the phone's appearance silently by default, with Settings → Design → System, Bright, Dark. Persist the choice; explicit overrides take precedence over device changes. Apply live changes without losing the visitor's place or interaction state. Do not add an information box or automatic-change notification.
-
-Add meaningful checks for default system behavior, manual override, persistence, and return to System. Include screenshots of the playable space in both schemes and of the selected settings control. Extend the emulator journey to exercise appearance changes before treating this slice as verified.
+## Completion
+All app code for this milestone, not just a plan or mockup. Orchestrator runs checks; do not attempt shell tools. Report files changed, design decisions, and limits honestly. You may edit only app/src/main, app/src/test, app/src/androidTest. Do not edit scripts/docs/build files. The supervising agent continues the full build after this milestone; do not claim launch readiness.

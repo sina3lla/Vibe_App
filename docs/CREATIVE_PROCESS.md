@@ -24,3 +24,6 @@ A task PASS means its acceptance criteria passed. It does not establish emotiona
 
 ## Durable records
 Maintain a brief decisions log: date, decision, status, reason, and source of owner approval where applicable. Keep sensitive autobiographical details out of app code and public artifacts; use general principles. The orchestrator or supervising agent owns brief updates and evidence records. Implementation agents report proposed changes without editing their own review rules.
+
+## Full-build authorization
+The owner now requests the complete app. docs/BUILD_PLAN.md defines the implementation sequence. Continue across milestones; the former single-slice-only stop is superseded. Tests, permission boundaries, and release-only approvals remain in force.

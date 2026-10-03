@@ -39,3 +39,6 @@ Release includes login, explicit Terms & Conditions/AGB acceptance, a required l
 Provide two coherent color schemes: bright and dark. Default to following the phone's system appearance and adapt silently when it changes. Do not show an information box, popup, toast, or explanatory onboarding for this adaptation.
 
 Settings includes **Design: System, Bright, Dark**. System follows the device; Bright and Dark override it until the user changes the setting. Persist the choice across app restarts. Both schemes express the same world and retain the same functionality. Localize these setting labels with the rest of the interface.
+
+## Full-build authorization
+The owner now requests the complete app. docs/BUILD_PLAN.md defines the implementation sequence. Continue across milestones; the former single-slice-only stop is superseded. Tests, permission boundaries, and release-only approvals remain in force.

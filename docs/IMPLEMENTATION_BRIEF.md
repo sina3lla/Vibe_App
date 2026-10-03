@@ -29,3 +29,6 @@ The owner authorized the reversible prototype and a Git backup. Purchases, servi
 
 ## Backup verification — 2026-10-03
 Debug build, unit tests, lint, Android-test APK compilation, and seven controller tests passed. No emulator was attached, so the connected device test and full autonomous cycle remain unverified. Bright/Dark/System is specified in the brief; the new world and theme selector are not yet implemented.
+
+## Full-build authorization
+The owner now requests the complete app. docs/BUILD_PLAN.md defines the implementation sequence. Continue across milestones; the former single-slice-only stop is superseded. Tests, permission boundaries, and release-only approvals remain in force.
