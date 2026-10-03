@@ -8,3 +8,5 @@
 - Release still requires login, explicit AGB acceptance, language selection, whole-app localization, Europe-first plus English. Other countries/languages remain undecided.
 - Existing designs and guided-session briefs are superseded; archive/pre-explorable-world preserves history.
 - The full automated Claude–Codex–Claude cycle is not yet verified. Fix/check infrastructure and update the old screen-specific QA before using it to verify the new world.
+
+- Full build authorized; do not stop after the first slice. German and English explicitly confirmed for initial implementation.
