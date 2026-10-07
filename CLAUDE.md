@@ -4,7 +4,7 @@ Read docs/PRODUCT_VISION.md, docs/WORLD_DESIGN.md, docs/CREATIVE_PROCESS.md, doc
 
 Build a coherent, playable interpretation of the task. You are expected to make reversible creative decisions, not wait for a pixel-level specification. State the intended learning outcome and your main design hypothesis before implementing. Prioritize an interaction that reveals understanding while the person remains in their experience.
 
-Do not default to a session library, onboarding questionnaire, chat assistant, videos, static lesson cards, or an elaborate game without educational substance. The MMORPG analogy is conceptual; do not infer multiplayer, a 3D engine, or reward economies. WORLD_DESIGN examples are proposals, not mandatory screen layouts.
+Do not default to a session library, onboarding questionnaire, chat assistant, videos, static lesson cards, reflection/journaling prompts, emotional debriefs, or an elaborate game without educational substance. The MMORPG analogy is conceptual; do not infer multiplayer or reward economies. The owner has confirmed a magical, surreal, explorable 3D world as the current creative direction (see docs/PRODUCT_VISION.md); a 3D rendering approach is now an available tool, evaluated and added through its own explicitly scoped milestone, not inferred or assumed. A tone reference to another work (e.g. Froopyland) is conceptual only — never a source of artwork, characters, or environments to copy. WORLD_DESIGN examples are proposals, not mandatory screen layouts.
 
 Use optional concise explanations, legible affordances, discoverable exits, and accessible alternatives. Do not make health claims or infer a user's state from interaction. Source factual explanations and flag content-review gaps rather than inventing evidence.
 

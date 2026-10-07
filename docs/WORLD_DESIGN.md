@@ -2,6 +2,11 @@
 
 Status: proposed design tools and examples. Agents may improve them. The confirmed product direction lives in PRODUCT_VISION.md.
 
+## Magical, surreal, explorable (owner-confirmed direction)
+The world is now explicitly a 3D (or hybrid 3D/Compose) space: magical, surreal, inventive, built for discovery and playful interaction. Froopyland (Rick and Morty) is a tone reference only — strange, shifting, unexpected — never a source of artwork, characters, or environments to copy. The grammar below (recognizable situation, something to change/compare, an understandable response, a short explanation, freedom to leave) still applies in full; a more fantastical visual register does not relax it, and does not permit a reflection prompt, journaling flow, or emotional debrief standing in for an interaction.
+
+A 3D presentation raises two concrete constraints the design must respect: a rendered 3D surface is not itself accessible to TalkBack or to the controller's tap-by-resource-id automation, so every interactive control needs to stay a real Compose composable (or an equivalent accessible semantics node) positioned over or beside the scene, never baked into the unreachable render; and a surreal, shifting environment must not become a vestibular/motion hazard — the reduce-motion setting must calm the 3D presentation itself, not just a 2D overlay.
+
 ## Smallest meaningful unit
 An encounter connects:
 1. A recognizable situation or question.
@@ -43,6 +48,6 @@ Record the intended distinction, interactions, exact explanatory copy, source/st
 Can someone discover an action without a tutorial? Can they explain what that action illustrates? Can they reject the interpretation? Does an explanation arrive when useful? Can they stay with their real experience instead of managing a complicated game? What would make them return out of curiosity?
 
 ## Two color schemes
-Design bright and dark palettes together using shared semantic color roles. Preserve the world's identity, hierarchy, and readability in both, including interactive states, contextual explanations, settings, and system bars. Do not implement the bright scheme as a simple color inversion. The precise palettes remain a creative choice.
+Design bright and dark palettes together using shared semantic color roles. Preserve the world's identity, hierarchy, and readability in both, including interactive states, contextual explanations, settings, system bars, and the 3D scene's own lighting/fog/materials. Do not implement the bright scheme as a simple color inversion. The precise palettes remain a creative choice.
 
 Default to silent system adaptation. Expose only the requested Settings control: Design → System, Bright, Dark; no explanatory box is required. A selected override takes precedence over subsequent system-theme changes.

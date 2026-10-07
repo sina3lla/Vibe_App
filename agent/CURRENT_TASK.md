@@ -1,17 +1,34 @@
-# Current Task — build the complete explorable app core
+<!--
+Controller-generated. agent/loop.py overwrites this file at the start of each
+milestone from agent/milestones.py — hand edits here are lost the next time the
+loop runs. Edit the milestone briefs in agent/milestones.py instead; the Claude
+subprocess the loop launches is denied Edit/Write on agent/** so it cannot
+rewrite its own acceptance criteria mid-cycle (see CLAUDE.md's execution
+boundary and agent/loop.py's claude() settings deny-list).
 
-Owner authorized the FULL BUILD, not a prototype-only stop. This milestone implements the complete offline product while provider/language decisions are obtained. Read docs/BUILD_PLAN.md, PRODUCT_VISION, WORLD_DESIGN, CREATIVE_PROCESS, and LAUNCH_CRITERIA.
+The content below is the first milestone ("engine") in the current sequence,
+shown here so the repository is accurate when no loop is running. See
+agent/README.md for the full milestone order and how to resume mid-sequence.
+-->
 
-## Build now
-Replace the old three-ritual home with an original, polished spatial world and connected places. No hidden prototype entry. Create five territories: Attention (competing signals / urgency versus importance), Wants & Needs (desire/obligation/uncertainty as hypotheses), Boundaries (distance and permission), Perspective (observation/interpretation/response), Rest & Ambition (capacity and chosen pace). At least two meaningful independently usable interactions per territory, with clear feedback and optional short explanations. Interactions must differ substantively, not five copies of the same slider. No forced sequence, quizzes, guaranteed benefit, or mandatory emotional disclosure. Learn by changing/comparing models, with visible limits.
+# Current Task — evaluate an Android 3D approach (design phase, read-only)
 
-Design a visually coherent environment with a distinctive spatial map and tactile interactive scenes. Keep accessible text navigation as an alternative. No chatbot, videos, game engine, dependency changes, web services, or fabricated therapy efficacy. Use existing Compose APIs. Keep old unused source only if needed to avoid unrelated work; remove camera permission if no reachable feature needs it.
+The owner has confirmed the new creative direction: an original, magical, explorable 3D world with surreal environments and playful, discovery-driven interaction. Froopyland (Rick and Morty) is a conceptual tone reference only — strange, shifting, inventive — never a source of artwork, characters, or environments to copy or imitate. There is no reflection flow, journaling prompt, emotional debrief, chatbot, or educational video; understanding still has to emerge through interaction, with optional brief explanations in context, exactly as before.
 
-Required app functionality: first-run language selection; English and German, now explicitly confirmed by the owner; all NEW strings localized consistently via Android resources; live System/Bright/Dark appearance, default System, persisted preference, no notifications; reduce-motion/quiet setting; local saved discoveries with explicit remove and confirmed erase-all; a world map, discoveries, and settings navigation; back and activity restoration; system-bar contrast and safe insets; offline operation. Persist non-sensitive interaction choices and bookmarks. No freeform personal journal or analytics.
+You cannot write files in this phase. Read CLAUDE.md, docs/PRODUCT_VISION.md, docs/WORLD_DESIGN.md, docs/LAUNCH_CRITERIA.md, app/build.gradle.kts, gradle/libs.versions.toml, and agent/visual_qa.py (to understand how the controller taps controls by Compose testTag today).
 
-Account requirement: expose a truthful Account screen explaining sign-in is not connected yet, with no pretend successful login and no password collection. The offline exploration is explicitly a local preview until production account/terms integration is completed in a subsequent milestone. Put draft terms/privacy access in settings, marked clearly as draft, no fake acceptance record. This is an implementation boundary, not permission to omit final login.
+## Evaluate
+Recommend exactly one Android 3D rendering approach for this project and the specific dependency coordinates/version you would add. Weigh, at minimum:
+- **Performance**: frame-time budget on a mid-range device; thermal/battery cost of a persistent 3D scene versus a mostly-static one with occasional animated accents.
+- **Accessibility**: a raw GL/Filament surface is not itself accessible to TalkBack or to the controller's resource-id-based tap automation — interactive controls must stay as real Compose composables overlaid on the 3D view (or expose equivalent invisible semantics nodes at the same screen position), and a non-spatial/reduced-motion fallback must remain possible without losing the core interaction.
+- **Asset licensing**: original or properly licensed low-poly/procedural assets only; flag any approach that would tempt importing unlicensed third-party models, and note the APK-size cost of any embedded assets.
+- **Automated verification**: whether the controller's adb/uiautomator screenshot-and-tap journey (agent/visual_qa.py) can still drive it — this must not require a new, separate verification mechanism.
+- **Integration cost**: one Gradle dependency change (plus version catalog entry) is the acceptable ceiling for this milestone; do not recommend an approach needing a native build system (CMake/NDK) or a second IDE toolchain unless no simpler option meets the above criteria.
 
-Add meaningful JVM tests for any pure model rules and Compose instrumentation tests for first-run language, independent territories, settings persistence, navigation/recreation, and saved discoveries/removal. Existing navigation test must be updated for the new real home; do not simply delete regression coverage. Expose stable Compose test tags via semantics testTagsAsResourceId for controller screenshot navigation, e.g. world-map, territory-attention, territory-needs, territory-boundaries, territory-perspective, territory-rest, nav-world, nav-discoveries, nav-settings, language-en, language-de, design-system, design-bright, design-dark, quiet-toggle, back.
+State your single recommendation plainly, the exact Gradle coordinate(s)/version, and the main trade-off you accepted. This is a working recommendation for the next bounded milestone to implement, not an owner-approved architecture decision — say so if your confidence is limited by not having run anything on real hardware.
 
 ## Completion
 All app code for this milestone, not just a plan or mockup. Orchestrator runs checks; do not attempt shell tools. Report files changed, design decisions, and limits honestly. You may edit only app/src/main, app/src/test, app/src/androidTest. Do not edit scripts/docs/build files. The supervising agent continues the full build after this milestone; do not claim launch readiness.
+
+## Execution owner
+The owner started this automated loop from Android Studio. Your current role is bounded implementation of this one milestone; do not launch other agents, loops, or milestones. The controller advances automatically once this milestone's checks and review pass; it never publishes, pushes, deploys, or spends on services on its own.

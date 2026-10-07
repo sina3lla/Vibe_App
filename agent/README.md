@@ -1,27 +1,102 @@
 # Autonomous development loop
 
-Run from the clean `agent/autonomous-dev` branch:
+The loop is currently **stopped** (`agent/STOP` is present) and the owner has not authorized starting it. This file documents the exact commands for when they do.
+
+## Start
+
+From a clean, committed `agent/autonomous-dev` branch, with the emulator already running:
+
+```sh
+rm agent/STOP   # only once the owner has decided to start
+python3 agent/loop.py --serial emulator-5554
+```
+
+The `account` milestone additionally requires the API base to be supplied explicitly (the controller will not guess it or fabricate a working deployment):
+
+```sh
+export FEELY_API_BASE=https://api.feel-y.com/api/v1
+```
+
+Without it, `account` is marked `blocked` and skipped; `engine`, `core`, `localization`, `qa`, and `release` still proceed (see **Milestones and blocking** below).
+
+## Stop
+
+```sh
+touch agent/STOP
+```
+
+or Ctrl-C the running process. The controller checks the stop file every second during child processes and terminates their process group. It commits a local-only WIP checkpoint of whatever the in-progress milestone had already produced before exiting (see **Checkpoints and resume**) — it does not discard work. Remove `agent/STOP` deliberately before the next start.
+
+## Resume
+
+Run the exact same start command again:
 
 ```sh
 python3 agent/loop.py --serial emulator-5554
 ```
 
-Claude implements CURRENT_TASK; the controller builds/tests/lints, runs connected Android tests and captures an emulator journey; Codex reviews the diff and screenshots; Claude fixes findings or provides a read-only completion handoff. Fixes repeat verification. PASS stops the task. It does not automatically invent another task, commit, push, or release.
+The controller reads `agent/runs/milestones-state.json` (gitignored, local only) and skips any milestone already marked `passed`, retries one marked `blocked` if its required environment variable is now set, and re-enters one marked `in_progress` from a WIP checkpoint. To discard saved progress and run the whole sequence again from `engine` (this does **not** discard already-committed app code, only the resume pointer):
 
-Defaults: three reviews maximum, 45 minutes overall, 15 minutes per agent/build invocation, and $3 per Claude invocation. The Claude cap is per invocation; Codex uses the authenticated account and has no monetary cap here. At most four Claude and three Codex calls per run. Existing CLI account/model defaults are used (Codex ignores personal configuration for isolation). Runtime limits are not precise spend limits.
+```sh
+python3 agent/loop.py --serial emulator-5554 --restart
+```
 
-Requires Python 3, Git, current Claude with `--restricted`/`--safe-mode`, Codex with `--ignore-user-config`, Android SDK/adb, Java, and a running emulator. The local default SDK and Android Studio Java paths support this Mac. Override JAVA_HOME or ANDROID_HOME when necessary. Authenticate both CLIs interactively before running. Never put credentials in this repo.
+## What it does
 
-Claude receives only Read/Glob/Grep/Edit/Write, restricted to its workspace, with hooks/customizations and MCP disabled. It cannot invoke a shell. Codex runs read-only with approvals disabled. The controller rejects changes outside app source/tests before executing Gradle. This is a local development boundary, not a hostile-code container: Gradle and instrumentation execute app code on your machine/emulator. Use a disposable environment before applying this to untrusted projects. The controller never changes permissions to get around failure.
+`agent/milestones.py` defines six bounded milestones, run in order, each its own implement → gates → Codex review → fix cycle:
 
-Stop with Ctrl-C or create `agent/STOP`; the controller checks it every second during child processes and terminates their process group. Remove STOP deliberately before restarting. A lock prevents simultaneous runs. Any failed command, malformed result, missing required evidence, denied permission, protected-file change, human blocker, timeout, or exhausted reviews stops with nonzero exit status. Failed build/QA stops for diagnosis rather than being mistaken for review PASS. Work is preserved; no automatic reset or stash.
+1. **engine** — a read-only design phase recommends one Android 3D rendering approach (performance/accessibility/licensing/automated-verification trade-offs), which the controller captures into `docs/decisions/3D_ENGINE_EVALUATION.md`; a second phase adds exactly that one dependency to `app/build.gradle.kts`/`gradle/libs.versions.toml` (the only milestone with write access to any Gradle file) plus a minimal placeholder 3D harness.
+2. **core** — the explorable shell, five territories, settings/appearance/language, persistence (combines docs/BUILD_PLAN.md items 1–2; see the comment at the top of agent/milestones.py for why).
+3. **account** — FeelY backend integration per docs/AUTH_INTEGRATION.md. Blocked without `FEELY_API_BASE`.
+4. **localization** — completes German/English coverage and flags content-sourcing gaps for whatever was actually built.
+5. **qa** — comprehensive build/test/lint/device-test/visual pass across both themes and both languages; fixes real defects only, no new scope.
+6. **release** — re-runs the full gate, then the controller (not Claude) writes `agent/runs/<run>/LAUNCH_CHECKLIST.md` from the recorded milestone outcomes. This is a status snapshot, never a release decision or a claim of launch readiness.
 
-Logs, reviews, screenshots, UI trees and manifests live under ignored `agent/runs/<timestamp>/`. See each run's RUN_LOG.md. `agent/REVIEW.md` is historical context only; current reviews are uniquely named within the run. Start only from a clean commit; review and commit the resulting diff before a subsequent task. No logs/screenshots enter Git automatically.
+A milestone's acceptance criteria are controller-owned: `agent/CURRENT_TASK.md` is regenerated by the controller from `agent/milestones.py` at the start of each milestone, and the Claude subprocess is denied `Edit`/`Write` on `agent/**`, so it cannot rewrite its own task description mid-cycle.
 
-Visual QA only installs the local debug APK on an explicitly selected emulator. It does not clear app data, modify global display settings, or touch a physical device. Use a test emulator whose camera permission for this app is not granted. It checks Home, Vibrant start/stop, Mannequin entry, Ascension simulated completion/restart and Back, capturing eight states. It stops the app after the journey. See the manifest for limitations. Screenshot review is required for PASS; it does not replace the launch matrix in docs/LAUNCH_CRITERIA.md.
+## Milestones and blocking
 
-Verification of the controller's failure handling:
+A milestone whose `required_env` is unset is marked `blocked: missing env: <VAR>` in the state file and skipped; milestones that don't depend on it still run (today, only `account` has a required env var). A milestone that genuinely fails — exhausts its build-repair or review-retry budget, or hits a scope violation — stops the **whole run** with a nonzero exit status; later milestones are not attempted on top of a failed one. Missing evidence (no screenshots, a malformed Codex response) is always treated as a failure, never as a pass.
+
+## Checkpoints and resume
+
+A milestone **PASS** triggers one local-only `git commit` (never a push) of exactly the files that milestone was allowed to touch — explicitly staged, never `git add -A`; credentials (`.env*`, `local.properties`, `*.jks`, `*.keystore`) and run artifacts (`agent/runs/**`, already gitignored) are excluded even if somehow modified. The commit happens *before* the milestone is recorded as `passed`: if the commit itself fails for any reason, the state file is not updated, so a resumed run retries the milestone instead of silently skipping it over an uncommitted tree.
+
+Scope checking and checkpoint staging are tracked separately on purpose: a controller-written file (`agent/CURRENT_TASK.md`, the engine milestone's `docs/decisions/3D_ENGINE_EVALUATION.md`, the account milestone's generated `ApiConfig.kt`) is never mistaken for a Claude edit by the scope check, but it is still correctly included in what gets committed — the two checks used to share one tracking dict, which could make a controller-written file quietly never get committed at all.
+
+If the run stops mid-milestone (STOP file, timeout, or an unhandled error that isn't a scope violation), the controller makes the same kind of commit labeled as a WIP checkpoint and marks that milestone `in_progress` in the state file, so nothing is left uncommitted and undiscoverable. A scope violation (Claude touched a forbidden path, or git HEAD changed unexpectedly) is the one case left **uncommitted** on purpose, so a human inspects it before anything is folded into history. The `engine` milestone's own grant to touch `app/build.gradle.kts`/`gradle/libs.versions.toml` is honored consistently across its implement call, its Codex review, and its read-only completion handoff — a legitimate dependency change made earlier in the milestone does not get flagged as a violation later in the same milestone's cycle.
+
+## Limits
+
+- `--max-reviews` (default 3): Codex review rounds per milestone.
+- `--max-build-repairs` (default 2): build/test/lint/visual-QA repair attempts per milestone, counted separately from review rounds.
+- `--minutes` (default 180): overall runtime for *this invocation*; hitting it stops cleanly (WIP checkpoint) and the next invocation resumes.
+- `--claude-budget` (default $3, max $10): per-Claude-invocation USD cap, not a combined cap. Codex uses the authenticated account with no monetary cap here.
+
+Per milestone, the worst case is 1 implement + `max-build-repairs` build-fix calls + (`max-reviews` − 1) review-fix calls + 1 handoff = up to 6 Claude calls and up to 3 Codex calls at the defaults. Across all six milestones that's a worst-case ceiling of 36 Claude calls (≈$108 at the default per-call cap) and 18 Codex calls for one fully-exhausted run — realistically far less, since most milestones should pass well before exhausting retries.
+
+Requires Python 3, Git, current Claude with `--restricted`/`--safe-mode`, Codex with `--ignore-user-config`, Android SDK/adb, Java, and a running emulator. The local default SDK and Android Studio Java paths support this Mac. Override `JAVA_HOME` or `ANDROID_HOME` when necessary. Authenticate both CLIs interactively before running. Never put credentials in this repo.
+
+Claude receives only Read/Glob/Grep/Edit/Write, restricted to its workspace, with hooks/customizations and MCP disabled. It cannot invoke a shell. Codex runs read-only with approvals disabled. The controller rejects changes outside the current milestone's allowed paths before executing Gradle — for every milestone except `engine` that's `app/src/main`, `app/src/test`, `app/src/androidTest`; `engine` additionally allows exactly `app/build.gradle.kts` and `gradle/libs.versions.toml`, never the wrapper, `settings.gradle.kts`, or the root build file. This is a local development boundary, not a hostile-code container: Gradle and instrumentation execute app code on your machine/emulator. Use a disposable environment before applying this to untrusted projects. The controller never changes permissions to get around failure.
+
+## Evidence
+
+Logs, reviews, screenshots, UI trees, and manifests live under ignored `agent/runs/<timestamp>/`, including `LAUNCH_CHECKLIST.md` written at the end of the `release` milestone. See each run's `RUN_LOG.md`. `agent/REVIEW.md` is historical context only; current reviews are uniquely named within the run. No logs/screenshots enter Git automatically; checkpoint commits only ever include the milestone's own allowed app/doc-decision files.
+
+`agent/visual_qa.py` drives journeys appropriate to each milestone's `visual_key` (`engine`, `core`, `account`, `localization`, `qa`) via the Compose test tags `agent/CURRENT_TASK.md` asks each milestone to expose (`world-map`, `territory-*`, `interaction-<territory>-{1,2,…}`, `nav-*`, `design-*`, `language-*`, `engine-canvas`, `nav-account`/`auth-*`/`terms-accept`, …). It installs the local debug APK on an explicitly selected emulator only, never touches a physical device, and stops the app after the journey. It **uninstalls the app first** (not just `install -r`) so a first-run language-selection screen, where implemented, is actually reachable and exercised on every run rather than silently skipped because a previous run already configured local state — this only ever affects this one app's own data, never an emulator-wide setting.
+
+For every milestone except `engine`, the journey runs the **full cross product** of the requested themes and languages (not each dimension independently): for each theme it explicitly taps that design option — including `system`, which used to be treated as a no-op — then for each language within it, re-enters the territories and exercises each one's required `interaction-<territory>-N` controls, not just entering and leaving. Every screenshot name is unique per combination (e.g. `territory-attention-interaction-1-bright-de`); a second capture under a name already used raises immediately rather than silently overwriting earlier evidence. The `engine` milestone's own journey requires its `engine-canvas` tag to exist — that is the entirety of its claim, so it is not optional evidence. A required tag that can't be found anywhere is a hard failure (an incomplete implementation), not skipped evidence; a genuinely optional tag (e.g. the `account` milestone's live-login state, which has no real test credentials available) is recorded as `not_verified` instead. Screenshot review is required for PASS; it does not replace the launch matrix in docs/LAUNCH_CRITERIA.md.
+
+## Prerequisites still outstanding
+
+- **Account milestone**: `FEELY_API_BASE` must be exported before starting, or it blocks. Even when exported, live reachability is unverified (a prior manual check returned HTTP 403 / error 1010) — the milestone's brief asks the implementing agent to build real network-error handling rather than assume success. Non-production test credentials, email-delivery/password-reset test paths, a confirmed terms-acceptance API, and Google Android client configuration remain unresolved (see docs/AUTH_INTEGRATION.md); none of these can be supplied by this automation.
+- **Engine milestone**: nothing external required; it is self-contained (evaluate, then add one dependency).
+- No other milestone has an external prerequisite today.
+
+## Tests
 
 ```sh
 python3 -m unittest discover -s agent/tests -v
 ```
+
+These are **mocked orchestration tests**: they exercise the controller's own decision logic (milestone progression and skipping, build-repair vs. review-retry limits, scope/credential checks, checkpoint/WIP behavior, state resume, malformed-review and missing-screenshot handling) against fixtures, with `claude`/`gates`/`review` usually stubbed out. A subset runs `verify_scope()`/`checkpoint()` against a real temporary Git repository (real `git add`/`commit`/`status`, not mocked) to prove the scope-vs-checkpoint separation and extra_paths handling actually work against Git, and another subset drives `agent/visual_qa.py`'s journey logic against a scripted fake `adb` (canned uiautomator XML, no real device). None of this starts a real Claude/Codex subprocess, runs Gradle, or touches an emulator. They prove the controller's bookkeeping and the visual-QA journey logic are correct in isolation. They are **not** evidence that a real end-to-end agent cycle works — only an actual `python3 agent/loop.py --serial <emulator>` run against a live emulator, with real Claude/Codex/Gradle, demonstrates that.

@@ -26,6 +26,7 @@ Login, complete translation coverage, payment integration, and the full world ar
 - Check compact phones, supported orientations, 200% text, system insets, supported app themes, and both gesture and three-button navigation. Define unsupported orientations explicitly.
 - TalkBack order, labels, state feedback, usable contrast/touch targets, and non-spatial alternatives are verified. Motion/audio can be reduced or disabled without losing core learning.
 - Verify startup and sustained interactions on a physical device as well as the emulator. Set and document measurable performance budgets for the actual world before release.
+- If the world uses a 3D rendering surface: every interactive control remains a real, TalkBack-reachable UI element, not content baked into an unreachable render; the reduce-motion setting calms the 3D presentation itself (no required continuous motion, no flashing/strobing); frame-time/thermal/battery behavior is measured on a representative device, not assumed from the emulator; and every 3D asset is original or has documented, checked licensing — flag any asset whose provenance is unclear rather than shipping it.
 
 ## D. Content and agency
 - Factual psychological/body explanations have documented sources and appropriate review; simplified metaphors disclose their limits where relevant.

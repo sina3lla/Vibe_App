@@ -3,7 +3,10 @@
 ## Purpose
 Create an interactive educational self-help companion to FeelY. FeelY supports conversations, journaling, reflection, and a personal map. This companion supports learning through exploration, attention, sensation, and interaction while the person remains connected to their present experience.
 
-The owner describes the conceptual model as an open-world MMORPG: freedom to roam, discover relationships, revisit places, and become more capable through familiarity. This does not mandate multiplayer, combat, avatars, quests, a game engine, or a large 3D environment.
+The owner describes the conceptual model as an open-world MMORPG: freedom to roam, discover relationships, revisit places, and become more capable through familiarity. This does not mandate multiplayer, combat, avatars, or quests.
+
+## Creative direction update — magical, surreal, explorable (2026-10-06)
+The owner has confirmed an original, magical, explorable 3D world: surreal environments, playful interaction, and discovery. Froopyland (Rick and Morty) is a conceptual tone reference only — strange, shifting, inventive — never a source of artwork, characters, or environments to copy or imitate. A 3D rendering approach is now available as a tool and is evaluated and added through its own explicitly scoped build milestone (performance, accessibility, asset licensing, and automated-verification considerations); it does not loosen any other confirmed requirement below, including that every interactive control stays a real, accessible UI element rather than an opaque rendered surface.
 
 ## The promise
 A person can enter without knowing a technique, follow something that resonates, and discover a useful way to understand what is happening. Learning does not require leaving the experience to watch a lesson or talk to a chatbot. Noticing something is a valid outcome; feeling better is not a required result.
@@ -11,6 +14,7 @@ A person can enter without knowing a technique, follow something that resonates,
 ## Confirmed creative direction
 - Exploration and interactive education are the primary experience.
 - No chatbot is needed, and educational videos are not the teaching format.
+- No reflection flows, journaling prompts, or emotional debriefs; understanding emerges through interaction, with optional brief explanations in context.
 - Brief optional explanations belong beside the interaction, at the moment they become useful.
 - The world may suggest where to look without prescribing a session or requiring a diagnostic intake.
 - Bodily sensations can inform exploration of wants and needs; they are not infallible answers.
@@ -21,7 +25,7 @@ A person can enter without knowing a technique, follow something that resonates,
 The craft of an intelligible world, meaningful interactive models, well-developed explanations, and connections people can revisit. Familiarity should increase independence. Sell access to a useful product, not a promised emotional transformation. Pricing and packaging remain open.
 
 ## Creative freedom
-Invent environments, visual metaphors, interactions, names, and navigation that serve this purpose. Build a coherent small world before expanding. A quiet abstract space, tactile illustrated environment, or architectural world are all legitimate proposals; none is prescribed. The prototype's esoteric screens and the old Prism design are not requirements.
+Invent environments, visual metaphors, interactions, names, and navigation that serve this purpose. Build a coherent small world before expanding. A quiet abstract space, tactile illustrated environment, architectural world, or magical surreal 3D landscape are all legitimate proposals; none is prescribed. The prototype's esoteric screens and the old Prism design are not requirements.
 
 Maintain recognizable places and connections. Avoid reducing the world to a list of sessions with a decorative map. Do not require a rigid sequence, daily streak, competitive wellbeing score, or completion ritual. Optional hints and accessible navigation are compatible with freedom.
 
