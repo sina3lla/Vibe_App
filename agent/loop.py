@@ -554,7 +554,8 @@ class Loop:
                   f'This run evidence is at {self.run}. Build/test/lint and the scripted interaction journey succeeded. '
                   f'Read {destination_manifest(self.run, label)} for themes/languages covered and its not_verified list. '
                   'Check evidence logs and the visual manifest; do not infer untested configurations passed. '
-                  'Return strict JSON for this milestone only. Do not execute Gradle or other agents. Do not modify files.')
+                  'Return strict JSON for this milestone only. Do not execute Gradle or other agents. Do not modify files.'
+                  + (f' {milestone.review_focus}' if milestone.review_focus else ''))
         argv = ['codex', 'exec', '--ignore-user-config', '--ignore-rules', '--ephemeral',
                 '--sandbox', 'read-only', '-c', 'approval_policy="never"', '--output-schema', str(self.schema),
                 '--output-last-message', str(output)]

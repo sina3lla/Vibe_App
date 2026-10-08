@@ -74,6 +74,20 @@ class Journey:
                         return bounds
         return None
 
+    def read_status(self, tag, data=None):
+        """Find a node BY resource-id == tag and return ITS OWN text/content-desc value
+        (unlike find(), which matches the tag against a node's identity to locate a
+        control to tap). Used for a node that reports a status value through its own
+        text, e.g. engine-render-status reporting the literal string 'native' or
+        'fallback' — a mechanical, independently-checkable claim rather than something
+        left to a screenshot's visual similarity or the implementing agent's own report."""
+        data = data if data is not None else self.tree()
+        for node in ET.fromstring(data).iter('node'):
+            rid = node.get('resource-id', '').rsplit('/', 1)[-1]
+            if rid == tag:
+                return node.get('text') or node.get('content-desc') or ''
+        return None
+
     def tap(self, tag, required=True, data=None):
         bounds = self.find(tag, data)
         if bounds is None:
@@ -153,7 +167,17 @@ def run(journey, milestone, themes, languages):
         # sequence. The harness itself is this milestone's entire claim, so its tag is
         # required evidence, not best-effort.
         journey.tap('engine-canvas')
-        journey.capture('engine-canvas')
+        data = journey.capture('engine-canvas')
+        # Mechanical acceptance check: a Compose-drawn fallback (or a missing status
+        # node) must not pass just because something visible was captured. See
+        # docs/reference/FILAMAT_ANDROID.md and agent/runs/20261008-232956/
+        # engine-1-review.json, which Codex BLOCKED for exactly this gap.
+        status = journey.read_status('engine-render-status', data)
+        if status != 'native':
+            raise RuntimeError(
+                "engine-render-status reports {!r}, not 'native' — a Compose fallback "
+                "or missing status node does not satisfy native-rendering acceptance "
+                "for this milestone".format(status))
         return
     if milestone not in ('core', 'account', 'localization', 'qa'):
         raise RuntimeError('Unknown milestone journey: ' + milestone)

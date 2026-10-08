@@ -29,11 +29,13 @@ visual_qa_spec = importlib.util.spec_from_file_location('visual_qa', AGENT_DIR /
 visual_qa = importlib.util.module_from_spec(visual_qa_spec); visual_qa_spec.loader.exec_module(visual_qa)
 
 
-def fake_milestone(key='fake', controller_only=False, required_env=(), design_brief=None, extra_paths=()):
+def fake_milestone(key='fake', controller_only=False, required_env=(), design_brief=None, extra_paths=(),
+                    review_focus=''):
     return milestones.Milestone(
         key=key, title='Fake milestone', brief='# Current Task — fake\n\nDo the fake thing.\n',
         required_env=required_env, visual_key='core', themes=('system',), languages=('en',),
-        controller_only=controller_only, design_brief=design_brief, extra_paths=extra_paths)
+        controller_only=controller_only, design_brief=design_brief, extra_paths=extra_paths,
+        review_focus=review_focus)
 
 
 class ReviewValidationTests(unittest.TestCase):
@@ -567,6 +569,34 @@ class RealGitCheckpointTests(unittest.TestCase):
         self.assertTrue(prompt.rstrip().endswith('Do not modify files.'))
         self.assertEqual(kwargs.get('timeout'), 900)
 
+    def test_review_appends_milestone_review_focus_to_the_prompt(self):
+        # The engine milestone's review_focus asks Codex to specifically distinguish
+        # native-rendered geometry from a Compose fallback, after being fooled by
+        # exactly that once (agent/runs/20261008-232956/engine-1-review.json).
+        controller = self._controller()
+        milestone = fake_milestone(
+            key='engine', extra_paths=(),
+            review_focus="Specifically check the engine-render-status tag reads 'native'.")
+        output_path = controller.run / 'engine-1-review.json'
+        output_path.write_text(json.dumps(dict(verdict='PASS', summary='ok', findings=[], visual_reviewed=True)))
+        with patch.object(controller, 'command') as command:
+            controller.review(milestone, 'engine-1', ['fake.png'])
+        prompt = command.call_args.kwargs.get('stdin')
+        self.assertIn("engine-render-status tag reads 'native'", prompt)
+        # The focus text is appended after, not instead of, the standard instructions.
+        self.assertIn('Do not modify files.', prompt)
+        self.assertLess(prompt.index('Do not modify files.'), prompt.index('engine-render-status'))
+
+    def test_review_omits_focus_text_when_milestone_has_none(self):
+        controller = self._controller()
+        milestone = fake_milestone(key='core', extra_paths=())  # default review_focus=''
+        output_path = controller.run / 'core-1-review.json'
+        output_path.write_text(json.dumps(dict(verdict='PASS', summary='ok', findings=[], visual_reviewed=True)))
+        with patch.object(controller, 'command') as command:
+            controller.review(milestone, 'core-1', ['fake.png'])
+        prompt = command.call_args.kwargs.get('stdin')
+        self.assertTrue(prompt.rstrip().endswith('Do not modify files.'))
+
     def test_handoff_claude_call_does_not_flag_milestones_own_extra_path_change(self):
         controller = self._controller()
         controller.args = SimpleNamespace(claude_budget=3.0)
@@ -592,10 +622,14 @@ class VisualQAJourneyTests(unittest.TestCase):
         self._sleep_patch.stop()
 
     def _journey(self, tags_present):
+        # Each entry is either a bare tag (rendered with empty text) or a (tag, text)
+        # pair, for a node that needs to report a value through its own text/
+        # content-desc (e.g. engine-render-status reporting 'native'/'fallback').
         out = Path(tempfile.mkdtemp())
+        entries = [(t, '') if isinstance(t, str) else t for t in tags_present]
         xml = ('<hierarchy>' + ''.join(
-            f'<node resource-id="{t}" text="" content-desc="" bounds="[0,0][100,50]" enabled="true"/>'
-            for t in tags_present) + '</hierarchy>').encode()
+            f'<node resource-id="{tag}" text="{text}" content-desc="" bounds="[0,0][100,50]" enabled="true"/>'
+            for tag, text in entries) + '</hierarchy>').encode()
         journey = visual_qa.Journey(Path('/fake/adb'), 'emulator-5554', out)
 
         def fake_command(*parts):
@@ -613,10 +647,28 @@ class VisualQAJourneyTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'engine-canvas'):
             visual_qa.run(journey, 'engine', ['system'], ['en'])
 
-    def test_engine_journey_captures_the_canvas_when_present(self):
-        journey = self._journey(tags_present=['engine-canvas'])
+    def test_engine_journey_passes_when_render_status_is_native(self):
+        journey = self._journey(tags_present=['engine-canvas', ('engine-render-status', 'native')])
         visual_qa.run(journey, 'engine', ['system'], ['en'])
         self.assertIn('engine-canvas', journey.captured)
+
+    def test_engine_journey_fails_when_render_status_is_fallback(self):
+        # Regression for agent/runs/20261008-232956: a Compose-drawn fallback (the
+        # harness honestly reporting 'fallback') must not pass as native rendering,
+        # even though something visible was captured.
+        journey = self._journey(tags_present=['engine-canvas', ('engine-render-status', 'fallback')])
+        with self.assertRaisesRegex(RuntimeError, "fallback"):
+            visual_qa.run(journey, 'engine', ['system'], ['en'])
+
+    def test_engine_journey_fails_when_render_status_tag_is_missing(self):
+        # A harness that never added the status tag at all must not be treated as a pass.
+        journey = self._journey(tags_present=['engine-canvas'])
+        with self.assertRaisesRegex(RuntimeError, 'engine-render-status'):
+            visual_qa.run(journey, 'engine', ['system'], ['en'])
+
+    def test_read_status_returns_none_for_an_absent_tag(self):
+        journey = self._journey(tags_present=['engine-canvas'])
+        self.assertIsNone(journey.read_status('engine-render-status'))
 
     def test_apply_theme_explicitly_taps_system_mode(self):
         # Regression: the old code treated 'system' as a no-op (no tap, no capture).
