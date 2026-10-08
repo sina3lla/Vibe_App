@@ -61,17 +61,22 @@ import com.google.android.filament.View as FilamentView
  * docs/decisions/3D_ENGINE_EVALUATION.md) and shows a real low-poly object.
  *
  * Known blocker, reported honestly rather than papered over: Filament's own
- * `RenderableManager` needs a compiled `.filamat` material produced by running `matc`
- * (a standalone binary, not a Gradle task) outside this project, and this implementing
- * session only has file tools — there is no shell step available to run `matc` or to
- * verify a hand-authored binary material payload against this exact Filament build.
- * Per CURRENT_TASK's own contingency, this harness therefore renders the required real
- * geometry (a shaded, rotatable cube) as the "best non-plugin substitute" using ordinary
- * Compose `Canvas` drawing — plain 3D-to-2D math, no native renderer involved — layered
- * over the Filament surface, which still independently proves the native pipeline mounts
- * and draws (its skybox) in this shell. Follow-up to raise with the owner/controller: a
- * small scoped milestone to run `matc` once (or evaluate the gltfio ubershader path) and
- * commit a compiled material asset, so the cube can move onto real Filament geometry.
+ * `RenderableManager` needs a `Material` built from compiled `.filamat` bytes.
+ * docs/decisions/3D_ENGINE_EVALUATION.md's 2026-10-08 update identifies the in-process
+ * way to produce one — `com.google.android.filament:filamat-android`'s `MaterialBuilder`,
+ * the same compiler used by the standalone `matc` CLI, needing no Gradle plugin — but its
+ * exact version is explicitly unverified against Maven Central from this file-tools-only
+ * session (no network access here), so it is deliberately not added to
+ * gradle/libs.versions.toml rather than guessed. Per CURRENT_TASK's own contingency, this
+ * harness therefore renders the required real geometry (a shaded, rotatable cube) as the
+ * "best non-plugin substitute" using ordinary Compose `Canvas` drawing — plain 3D-to-2D
+ * math, no native renderer involved — layered over the Filament surface, which still
+ * independently proves the native pipeline mounts and draws (its skybox) in this shell.
+ * Follow-up to raise with the owner/controller: confirm
+ * `com.google.android.filament:filamat-android`'s version against Maven Central's
+ * `maven-metadata.xml` (POM/AAR resolving), then add it in its own scoped milestone and
+ * compile a real material via `MaterialBuilder` so the cube can move onto real Filament
+ * geometry.
  *
  * The cube only rotates in fixed, discrete steps on an explicit tap — never continuously
  * on its own — so there is no reduce-motion branch to add: the idle state already has no
