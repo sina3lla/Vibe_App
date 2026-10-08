@@ -41,11 +41,32 @@ The controller reads `agent/runs/milestones-state.json` (gitignored, local only)
 python3 agent/loop.py --serial emulator-5554 --restart
 ```
 
+## What you will see while it runs
+
+The agents run **headlessly** — Claude and Codex are CLI subprocesses with no window of their own; everything you see comes from this controller's own terminal output, its log files, and the emulator's screen (which only changes after a build/install step actually runs, not while Claude or Codex are "thinking").
+
+In the terminal that started the loop, expect:
+- One `START <label> — <milestone> · <actor> · <action> (timeout <n>s)` line when each step begins (`<actor>` is `Claude`, `automated checks` [Gradle/visual QA], or `Codex`).
+- A heartbeat line **at least every 30 seconds** during a long step: elapsed time, time left until that step's own timeout, and either a short redacted summary of new subprocess output or the honest `process still running; no new output to show yet` — never a fabricated percentage, and elapsed time alone is never presented as evidence of progress.
+- One `DONE <label> (<n>s)` line when the step finishes, or a specific failure reason (e.g. which exact permission was denied, or the last matching `FAILED`/`error:` line from the log) instead of a bare "failed; see log" pointer.
+- A final plain-language summary on exit — why it stopped, what was saved (a WIP checkpoint commit, if any), what remains unverified, and the exact command to resume — whether it exited cleanly, hit the STOP file/timeout, was interrupted with Ctrl-C, or hit a genuine error.
+
+**To follow along from a second terminal**, tail the current run's log and the live status file:
+
+```sh
+tail -f agent/runs/STATUS.md
+tail -f "agent/runs/$(ls -t agent/runs | grep -E '^[0-9]{8}-[0-9]{6}$' | head -1)/RUN_LOG.md"
+```
+
+`agent/runs/STATUS.md` (controller-owned, gitignored, rewritten throughout the run — never hand-edit it) always shows: the run ID and when it was last updated; whether the run is running/stopped/failed/complete; the current milestone, actor, and action; which milestones are completed vs. remaining; the latest Codex-verified result with links to its evidence; the current blocker, if any; whether you need to do anything and the exact next step; and the latest checkpoint commit with whether it's been pushed. A recent timestamp in STATUS.md is **not** proof the process is still alive on its own — if you want to be sure, check for the process itself (`pgrep -fl agent/loop.py`) rather than trusting the file alone; an abrupt kill (e.g. `kill -9`, a machine sleep/crash) can leave it stale.
+
+**When does the emulator actually change?** Only after a milestone's `implement`/`buildfix`/`fix` Claude call finishes and the controller's own `gates()` step runs — that's when `gradlew assembleDebug`/`test`/`lintDebug`/`connectedDebugAndroidTest` execute and `agent/visual_qa.py` installs the freshly built APK and drives it. During the Claude or Codex steps themselves (often the longest part of a cycle), the emulator will sit on whatever it was last showing — that is expected, not a hang.
+
 ## What it does
 
 `agent/milestones.py` defines six bounded milestones, run in order, each its own implement → gates → Codex review → fix cycle:
 
-1. **engine** — a read-only design phase recommends one Android 3D rendering approach (performance/accessibility/licensing/automated-verification trade-offs), which the controller captures into `docs/decisions/3D_ENGINE_EVALUATION.md`; a second phase adds exactly that one dependency to `app/build.gradle.kts`/`gradle/libs.versions.toml` (the only milestone with write access to any Gradle file) plus a minimal placeholder 3D harness.
+1. **engine** — a read-only design phase recommends an Android 3D rendering approach (performance/accessibility/licensing/automated-verification trade-offs, and now explicitly required to actually render a visible object, not just an ambient color/skybox), which the controller captures into `docs/decisions/3D_ENGINE_EVALUATION.md`; a second phase adds that dependency — and, if genuinely needed to render real geometry (not a second competing engine), one small related dependency such as a runtime material compiler — to `app/build.gradle.kts`/`gradle/libs.versions.toml` (the only milestone with write access to any Gradle file) plus a minimal 3D harness.
 2. **core** — the explorable shell, five territories, settings/appearance/language, persistence (combines docs/BUILD_PLAN.md items 1–2; see the comment at the top of agent/milestones.py for why).
 3. **account** — FeelY backend integration per docs/AUTH_INTEGRATION.md. Blocked without `FEELY_API_BASE`.
 4. **localization** — completes German/English coverage and flags content-sourcing gaps for whatever was actually built.
@@ -65,6 +86,8 @@ A milestone **PASS** triggers one local-only `git commit` (never a push) of exac
 Scope checking and checkpoint staging are tracked separately on purpose: a controller-written file (`agent/CURRENT_TASK.md`, the engine milestone's `docs/decisions/3D_ENGINE_EVALUATION.md`, the account milestone's generated `ApiConfig.kt`) is never mistaken for a Claude edit by the scope check, but it is still correctly included in what gets committed — the two checks used to share one tracking dict, which could make a controller-written file quietly never get committed at all.
 
 If the run stops mid-milestone (STOP file, timeout, or an unhandled error that isn't a scope violation), the controller makes the same kind of commit labeled as a WIP checkpoint and marks that milestone `in_progress` in the state file, so nothing is left uncommitted and undiscoverable. A scope violation (Claude touched a forbidden path, or git HEAD changed unexpectedly) is the one case left **uncommitted** on purpose, so a human inspects it before anything is folded into history. The `engine` milestone's own grant to touch `app/build.gradle.kts`/`gradle/libs.versions.toml` is honored consistently across its implement call, its Codex review, and its read-only completion handoff — a legitimate dependency change made earlier in the milestone does not get flagged as a violation later in the same milestone's cycle.
+
+**2026-10-08 permission-pattern fix**: the first real engine-milestone run was denied editing `app/build.gradle.kts` even though it was granted that exact path. The cause: Claude Code's permission deny patterns match gitignore-style — a bare filename with no `/` in it (like the deny rule meant only for the *root* `build.gradle.kts`) matches that filename at *any* depth, so it was also denying the nested `app/build.gradle.kts`. `build_deny_list()` now root-anchors every bare top-level filename (`/build.gradle.kts`, `/settings.gradle.kts`, `/gradle.properties`, `/gradlew*`, `/AGENTS.md`, `/CLAUDE.md`) so they no longer shadow a same-named file elsewhere in the tree; patterns that already contain a `/` (e.g. `app/build.gradle.kts`, `gradle/libs.versions.toml`) were already root-relative and are unchanged. See `agent/tests/test_loop.py`'s `PermissionDenyListTests`.
 
 ## Limits
 

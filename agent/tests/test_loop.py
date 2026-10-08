@@ -187,6 +187,10 @@ class MilestoneRepairLimitTests(unittest.TestCase):
         controller.run = Path(self._tempdir.name) / 'evidence'
         controller.state = {}
         controller.current_milestone = None
+        controller.current_actor = None
+        controller.current_action = None
+        controller.last_implementation_claim = ''
+        controller.last_review = None
         controller.scope_baseline = {}
         controller.checkpoint_baseline = {}
         return controller
@@ -196,6 +200,7 @@ class MilestoneRepairLimitTests(unittest.TestCase):
         milestone = fake_milestone(controller_only=True)  # skips the initial implement call
         with patch.object(controller, 'gates', side_effect=RuntimeError('gradle failed')), \
              patch.object(controller, 'claude') as claude, \
+             patch.object(controller, 'write_status'), \
              patch.object(controller, 'log'):
             with self.assertRaisesRegex(RuntimeError, 'repair limit'):
                 controller.run_milestone(milestone)
@@ -209,6 +214,7 @@ class MilestoneRepairLimitTests(unittest.TestCase):
         with patch.object(controller, 'gates', return_value=['img.png']), \
              patch.object(controller, 'review', return_value=fix_review), \
              patch.object(controller, 'claude') as claude, \
+             patch.object(controller, 'write_status'), \
              patch.object(controller, 'log'):
             with self.assertRaisesRegex(RuntimeError, 'retry limit'):
                 controller.run_milestone(milestone)
@@ -222,6 +228,7 @@ class MilestoneRepairLimitTests(unittest.TestCase):
         with patch.object(controller, 'gates', return_value=['img.png']), \
              patch.object(controller, 'review', return_value=blocked_review), \
              patch.object(controller, 'claude') as claude, \
+             patch.object(controller, 'write_status'), \
              patch.object(controller, 'log'):
             with self.assertRaisesRegex(RuntimeError, 'missing infra'):
                 controller.run_milestone(milestone)
@@ -236,6 +243,7 @@ class MilestoneRepairLimitTests(unittest.TestCase):
              patch.object(controller, 'claude') as claude, \
              patch.object(controller, 'checkpoint', return_value='deadbeef') as checkpoint, \
              patch.object(controller, 'save_state'), \
+             patch.object(controller, 'write_status'), \
              patch.object(controller, 'log'):
             controller.run_milestone(milestone)
             self.assertEqual(claude.call_count, 2)  # implement + handoff
@@ -256,6 +264,7 @@ class MilestoneRepairLimitTests(unittest.TestCase):
              patch.object(controller, 'claude') as claude, \
              patch.object(controller, 'checkpoint', return_value='deadbeef') as checkpoint, \
              patch.object(controller, 'save_state'), \
+             patch.object(controller, 'write_status'), \
              patch.object(controller, 'log'):
             controller.run_milestone(milestone)
             handoff_call = claude.call_args_list[-1]
@@ -275,6 +284,7 @@ class MilestoneRepairLimitTests(unittest.TestCase):
              patch.object(controller, 'claude'), \
              patch.object(controller, 'checkpoint', side_effect=RuntimeError('git commit failed')), \
              patch.object(controller, 'save_state') as save_state, \
+             patch.object(controller, 'write_status'), \
              patch.object(controller, 'log'):
             with self.assertRaisesRegex(RuntimeError, 'git commit failed'):
                 controller.run_milestone(milestone)
@@ -286,6 +296,7 @@ class MilestoneRepairLimitTests(unittest.TestCase):
         milestone = fake_milestone()
         with patch.object(controller, 'claude', side_effect=loop.ScopeViolation('bad path')), \
              patch.object(controller, 'gates') as gates, \
+             patch.object(controller, 'write_status'), \
              patch.object(controller, 'log'):
             with self.assertRaises(loop.ScopeViolation):
                 controller.run_milestone(milestone)
@@ -306,6 +317,7 @@ class MilestoneRepairLimitTests(unittest.TestCase):
              patch.object(controller, 'review', return_value=pass_review), \
              patch.object(controller, 'checkpoint', return_value=None), \
              patch.object(controller, 'save_state'), \
+             patch.object(controller, 'write_status'), \
              patch.object(controller, 'log'):
             controller.run_milestone(milestone)
             self.assertIn('docs/decisions/3D_ENGINE_EVALUATION.md', written)
@@ -443,6 +455,12 @@ class RealGitCheckpointTests(unittest.TestCase):
         controller.scope_baseline = initial
         controller.checkpoint_baseline = initial
         controller.head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.repo)
+        controller.state = {}
+        controller.current_milestone = None
+        controller.current_actor = None
+        controller.current_action = None
+        controller.last_implementation_claim = ''
+        controller.last_review = None
         return controller
 
     def test_controller_owned_file_is_actually_checkpointed(self):
@@ -599,6 +617,328 @@ class VisualQAJourneyTests(unittest.TestCase):
         self.assertIn('territory-attention-interaction-1-bright-de', journey.captured)
         self.assertIn('territory-attention-interaction-1-system-en', journey.captured)
         self.assertEqual(len(journey.captured), len(set(journey.captured)))
+
+
+class PermissionDenyListTests(unittest.TestCase):
+    """Regression coverage for the 2026-10-08 engine-milestone failure: Claude was
+    denied Edit on app/build.gradle.kts despite that exact path being granted via
+    Milestone.extra_paths, because the deny rule meant only for the root
+    build.gradle.kts matched it too under gitignore-style any-depth basename
+    matching. See anchored()/build_deny_list() in agent/loop.py."""
+
+    def test_anchored_adds_leading_slash_only_to_bare_filenames(self):
+        self.assertEqual(loop.anchored('build.gradle.kts'), '/build.gradle.kts')
+        self.assertEqual(loop.anchored('gradlew*'), '/gradlew*')
+        self.assertEqual(loop.anchored('CLAUDE.md'), '/CLAUDE.md')
+        # Already contains a non-trailing '/': already root-relative, left unchanged.
+        self.assertEqual(loop.anchored('app/build.gradle.kts'), 'app/build.gradle.kts')
+        self.assertEqual(loop.anchored('gradle/wrapper/**'), 'gradle/wrapper/**')
+
+    def test_deny_list_never_contains_a_bare_root_gradle_filename(self):
+        # The actual bug: a bare 'Edit(build.gradle.kts)' entry would also have matched
+        # app/build.gradle.kts under gitignore-style matching, even though it was only
+        # ever meant to protect the root file.
+        deny = loop.build_deny_list(extra_paths=('app/build.gradle.kts', 'gradle/libs.versions.toml'))
+        self.assertNotIn('Edit(build.gradle.kts)', deny)
+        self.assertNotIn('Write(build.gradle.kts)', deny)
+        self.assertIn('Edit(/build.gradle.kts)', deny)
+        self.assertIn('Write(/build.gradle.kts)', deny)
+
+    def test_granted_extra_path_is_never_denied(self):
+        deny = loop.build_deny_list(extra_paths=('app/build.gradle.kts', 'gradle/libs.versions.toml'))
+        self.assertNotIn('Edit(app/build.gradle.kts)', deny)
+        self.assertNotIn('Write(app/build.gradle.kts)', deny)
+        self.assertNotIn('Edit(gradle/libs.versions.toml)', deny)
+
+    def test_ungranted_milestone_still_denies_every_gradle_file(self):
+        deny = loop.build_deny_list(extra_paths=())
+        self.assertIn('Edit(app/build.gradle.kts)', deny)
+        self.assertIn('Edit(/build.gradle.kts)', deny)
+        self.assertIn('Edit(/settings.gradle.kts)', deny)
+        self.assertIn('Edit(/gradle.properties)', deny)
+        self.assertIn('Edit(gradle/libs.versions.toml)', deny)
+
+    def test_wrapper_and_settings_stay_denied_even_with_an_extra_path_granted(self):
+        # Granting app/build.gradle.kts must never widen protection for anything else.
+        deny = loop.build_deny_list(extra_paths=('app/build.gradle.kts',))
+        self.assertIn('Edit(/gradlew*)', deny)
+        self.assertIn('Edit(gradle/wrapper/**)', deny)
+        self.assertIn('Edit(/settings.gradle.kts)', deny)
+        self.assertIn('Edit(/build.gradle.kts)', deny)
+
+    def test_credential_and_control_file_denials_are_always_present(self):
+        deny = loop.build_deny_list(extra_paths=('app/build.gradle.kts',))
+        for rule in ('Read(.env*)', 'Read(local.properties)', 'Edit(agent/**)', 'Write(agent/**)',
+                     'Edit(docs/**)', 'Edit(/AGENTS.md)', 'Edit(/CLAUDE.md)', 'Edit(.git/**)'):
+            self.assertIn(rule, deny)
+
+    def test_describe_label_maps_known_suffixes(self):
+        self.assertEqual(loop.describe_label('engine-implement'), ('engine', 'Claude', 'implementing the milestone'))
+        self.assertEqual(loop.describe_label('core-2-buildfix')[1], 'Claude')
+        self.assertEqual(loop.describe_label('core-1-gradle')[1], 'automated checks')
+        self.assertEqual(loop.describe_label('account-1-codex')[1], 'Codex')
+        self.assertEqual(loop.describe_label('engine-design')[0], 'engine')
+
+    def test_describe_label_falls_back_for_unknown_suffix(self):
+        key, actor, action = loop.describe_label('engine-somethingnew')
+        self.assertEqual(key, 'engine')
+        self.assertEqual(actor, 'controller')
+
+    def test_claude_failure_reason_names_the_specific_denied_path(self):
+        # This is exactly the 2026-10-08 failure shape: reproduce it and check the
+        # message now names the file, instead of the old generic combined message.
+        response = {
+            'is_error': False, 'subtype': 'success',
+            'permission_denials': [
+                {'tool_name': 'Edit', 'tool_input': {'file_path': '/repo/app/build.gradle.kts'}},
+            ],
+            'result': 'blocked on a file',
+        }
+        reason = loop.claude_failure_reason(response, 'engine-implement')
+        self.assertIn('engine-implement', reason)
+        self.assertIn('app/build.gradle.kts', reason)
+        self.assertIn('Edit', reason)
+
+    def test_claude_failure_reason_distinguishes_error_subtype_from_blocked(self):
+        error_reason = loop.claude_failure_reason(
+            {'is_error': True, 'subtype': 'error', 'permission_denials': [], 'result': ''}, 'core-implement')
+        self.assertIn('did not complete successfully', error_reason)
+        blocked_reason = loop.claude_failure_reason(
+            {'is_error': False, 'subtype': 'success', 'permission_denials': [], 'result': 'BLOCKED: no backend'},
+            'account-implement')
+        self.assertIn('BLOCKED', blocked_reason)
+
+    def test_claude_failure_reason_is_none_on_success(self):
+        self.assertIsNone(loop.claude_failure_reason(
+            {'is_error': False, 'subtype': 'success', 'permission_denials': [], 'result': 'all done'}, 'core-implement'))
+
+    def test_redact_scrubs_secret_shaped_text(self):
+        text = 'token=sk-abcdef1234567890 ran fine; Bearer abcdefghijklmnop123 also used'
+        redacted = loop.redact(text)
+        self.assertNotIn('sk-abcdef1234567890', redacted)
+        self.assertNotIn('abcdefghijklmnop123', redacted)
+        self.assertIn('[redacted]', redacted)
+
+    def test_redact_leaves_ordinary_build_output_alone(self):
+        text = '> Task :app:compileDebugKotlin\nBUILD SUCCESSFUL in 4s'
+        self.assertEqual(loop.redact(text), text)
+
+
+class StatusAndReportingTests(unittest.TestCase):
+    """Regression coverage for agent/runs/STATUS.md, RUN_LOG.md handoff entries, and
+    distinguishing 'still running' from verified progress — against a real temporary
+    Git repository so _is_pushed()'s git calls are real, not mocked."""
+
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.repo = Path(self.tempdir.name)
+        subprocess.run(['git', 'init', '-q'], cwd=self.repo, check=True)
+        subprocess.run(['git', 'config', 'user.email', 't@example.com'], cwd=self.repo, check=True)
+        subprocess.run(['git', 'config', 'user.name', 'T'], cwd=self.repo, check=True)
+        (self.repo / 'README.md').write_text('x')
+        subprocess.run(['git', 'add', '.'], cwd=self.repo, check=True)
+        subprocess.run(['git', 'commit', '-q', '-m', 'init'], cwd=self.repo, check=True)
+        self._root_patch = patch.object(loop, 'ROOT', self.repo)
+        self._root_patch.start()
+
+    def tearDown(self):
+        self._root_patch.stop()
+        self.tempdir.cleanup()
+
+    def _controller(self):
+        controller = object.__new__(loop.Loop)
+        controller.run = self.repo / 'agent/runs/testrun'
+        controller.run.mkdir(parents=True)
+        controller.state = {}
+        controller.current_milestone = None
+        controller.current_actor = None
+        controller.current_action = None
+        controller.last_implementation_claim = ''
+        controller.last_review = None
+        controller.head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.repo)
+        return controller
+
+    def _read_status(self):
+        return (self.repo / 'agent/runs/STATUS.md').read_text()
+
+    def test_is_pushed_unknown_without_an_upstream(self):
+        controller = self._controller()
+        commit = controller.head.decode().strip()
+        self.assertEqual(controller._is_pushed(commit), 'unknown (no upstream tracking branch configured)')
+
+    def _fake_remote_tracking(self):
+        # A real `origin` remote (unreachable URL, never actually contacted) plus a
+        # hand-placed remote-tracking ref, so @{u} resolves the way it would after a
+        # real `git push -u` — without needing network access in this test.
+        subprocess.run(['git', 'remote', 'add', 'origin', 'https://example.invalid/repo.git'],
+                        cwd=self.repo, check=True)
+        subprocess.run(['git', 'update-ref', 'refs/remotes/origin/agent/autonomous-dev', 'HEAD'],
+                        cwd=self.repo, check=True)
+        subprocess.run(['git', 'branch', '--set-upstream-to=origin/agent/autonomous-dev'],
+                        cwd=self.repo, check=True)
+
+    def test_is_pushed_yes_when_upstream_matches_head(self):
+        controller = self._controller()
+        self._fake_remote_tracking()
+        commit = controller.head.decode().strip()
+        self.assertEqual(controller._is_pushed(commit), 'yes')
+
+    def test_is_pushed_no_when_upstream_is_behind(self):
+        controller = self._controller()
+        self._fake_remote_tracking()
+        (self.repo / 'new.txt').write_text('x')
+        subprocess.run(['git', 'add', '.'], cwd=self.repo, check=True)
+        subprocess.run(['git', 'commit', '-q', '-m', 'second'], cwd=self.repo, check=True)
+        controller.head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.repo)
+        commit = controller.head.decode().strip()
+        self.assertIn('no (local only', controller._is_pushed(commit))
+
+    def test_write_status_reports_completed_and_remaining_milestones(self):
+        controller = self._controller()
+        controller.state = {'engine': 'passed', 'core': 'passed', 'account': 'blocked: missing env: FEELY_API_BASE'}
+        controller.write_status('running')
+        text = self._read_status()
+        self.assertIn('Run ID', text)
+        self.assertIn('State: **running**', text)
+        self.assertIn('engine, core', text)  # completed
+        self.assertIn('`account`: blocked: missing env: FEELY_API_BASE', text)
+        for key in ('localization', 'qa', 'release'):
+            self.assertIn(key, text)
+
+    def test_write_status_includes_current_milestone_actor_and_action(self):
+        controller = self._controller()
+        controller.current_milestone = 'engine'
+        controller.current_actor = 'Claude'
+        controller.current_action = 'implementing the milestone'
+        controller.write_status('running')
+        text = self._read_status()
+        self.assertIn('Current milestone: `engine`', text)
+        self.assertIn('Current actor: Claude', text)
+        self.assertIn('implementing the milestone', text)
+
+    def test_write_status_surfaces_latest_review_and_blocker(self):
+        controller = self._controller()
+        controller.last_review = {'milestone': 'engine', 'label': 'engine-1', 'verdict': 'FIX',
+                                   'summary': 'missing mesh', 'log': 'x.log', 'manifest': 'm.json'}
+        controller.write_status('failed', blocker='build/test/lint/visual repair limit reached',
+                                 needs_user_action=True, next_step='fix the build and rerun')
+        text = self._read_status()
+        self.assertIn('verdict **FIX**: missing mesh', text)
+        self.assertIn('repair limit reached', text)
+        self.assertIn('**Yes** — fix the build and rerun', text)
+
+    def test_write_status_no_blocker_reads_cleanly(self):
+        controller = self._controller()
+        controller.write_status('complete')
+        text = self._read_status()
+        self.assertIn('## Current blocker\n- None.', text)
+        self.assertIn('No — the controller is proceeding on its own.', text)
+
+    def test_log_handoff_entry_distinguishes_claim_from_verified_result(self):
+        controller = self._controller()
+        controller.last_implementation_claim = 'I added the dependency and a harness.'
+        milestone = fake_milestone(key='engine')
+        review = dict(verdict='FIX', summary='only a skybox, no real mesh', findings=['no visible object'])
+        controller.log_handoff_entry(milestone, 'engine-1', review)
+        text = (controller.run / 'RUN_LOG.md').read_text()
+        self.assertIn("implementation claim (not independently verified by itself)", text)
+        self.assertIn('I added the dependency and a harness.', text)
+        self.assertIn('Codex review verdict:** FIX', text)
+        self.assertIn('no visible object', text)
+        self.assertIn('Claude attempts a fix', text)
+
+    def test_log_handoff_entry_preserves_raw_review_json_path(self):
+        controller = self._controller()
+        milestone = fake_milestone(key='engine')
+        review = dict(verdict='PASS', summary='ok', findings=[])
+        controller.log_handoff_entry(milestone, 'engine-1', review)
+        text = (controller.run / 'RUN_LOG.md').read_text()
+        self.assertIn(str(controller.run / 'engine-1-review.json'), text)
+
+
+class HeartbeatTests(unittest.TestCase):
+    """A live heartbeat must actually appear during a long-running step — tested
+    against a real (trivial) subprocess, not a mock, with the heartbeat interval
+    turned down so the test doesn't need to wait 30 real seconds."""
+
+    def test_heartbeat_prints_during_a_running_step(self):
+        import io
+        import contextlib
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            subprocess.run(['git', 'init', '-q'], cwd=repo, check=True)
+            (repo / 'agent').mkdir()
+            with patch.object(loop, 'ROOT', repo):
+                controller = object.__new__(loop.Loop)
+                controller.run = repo / 'agent/runs/testrun'
+                controller.run.mkdir(parents=True)
+                controller.env = os.environ.copy()
+                controller.deadline = time.monotonic() + 3600
+                controller.HEARTBEAT_SECONDS = 0.2
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    with patch.object(controller, 'write_status'), patch.object(controller, 'log'):
+                        controller.command(['sleep', '1.5'], 'core-1-gradle', timeout=30)
+        output = buf.getvalue()
+        self.assertIn('until step timeout', output)
+        self.assertIn('core', output)
+        self.assertIn('automated checks', output)
+
+    def test_still_running_wording_when_no_new_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            subprocess.run(['git', 'init', '-q'], cwd=repo, check=True)
+            (repo / 'agent').mkdir()
+            with patch.object(loop, 'ROOT', repo):
+                controller = object.__new__(loop.Loop)
+                controller.run = repo / 'agent/runs/testrun'
+                controller.run.mkdir(parents=True)
+                controller.env = os.environ.copy()
+                controller.deadline = time.monotonic() + 3600
+                controller.HEARTBEAT_SECONDS = 0.2
+                import io, contextlib
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    with patch.object(controller, 'write_status'), patch.object(controller, 'log'):
+                        controller.command(['sleep', '1.5'], 'core-1-gradle', timeout=30)
+        # `sleep` produces no stdout, so the heartbeat must say so honestly, never
+        # inventing progress from elapsed time alone.
+        self.assertIn('process still running; no new output to show yet', buf.getvalue())
+
+
+class ExitHandlingTests(unittest.TestCase):
+    """abort()/print_exit_summary() — the plain-language exit path shared by a scope
+    violation, STOP file/timeout, Ctrl+C, and a genuine error."""
+
+    def test_abort_checkpoints_on_timeout_but_not_on_scope_violation(self):
+        from types import SimpleNamespace
+        loop_obj = Mock()
+        loop_obj.checkpoint_wip.return_value = 'deadbeef'
+        args = SimpleNamespace(serial='emulator-5554')
+
+        code = loop.abort(loop_obj, args, 'stopped', 'Total runtime limit reached',
+                           make_checkpoint=True, next_step='rerun')
+        self.assertEqual(code, 1)
+        loop_obj.checkpoint_wip.assert_called_once()
+        loop_obj.write_status.assert_called_once()
+        self.assertEqual(loop_obj.write_status.call_args.args[0], 'stopped')
+
+        loop_obj.reset_mock()
+        code = loop.abort(loop_obj, args, 'failed', 'Protected files changed: settings.gradle.kts',
+                           make_checkpoint=False, next_step='inspect by hand')
+        self.assertEqual(code, 1)
+        loop_obj.checkpoint_wip.assert_not_called()
+
+    def test_abort_survives_a_failing_checkpoint_attempt(self):
+        from types import SimpleNamespace
+        loop_obj = Mock()
+        loop_obj.checkpoint_wip.side_effect = RuntimeError('git commit failed')
+        args = SimpleNamespace(serial='emulator-5554')
+        code = loop.abort(loop_obj, args, 'failed', 'build repair limit reached',
+                           make_checkpoint=True, next_step='fix and rerun')
+        self.assertEqual(code, 1)
+        # The failure to checkpoint itself must not raise out of abort().
+        self.assertTrue(any('WIP checkpoint failed' in str(c) for c in loop_obj.log.call_args_list))
 
 
 if __name__ == '__main__':

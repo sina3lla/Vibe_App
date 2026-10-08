@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import sys
@@ -75,6 +76,23 @@ GRADLE_NAMED_FILES = (
 )
 GRADLE_ALWAYS_PROTECTED_GLOBS = ('gradlew*', 'gradle/wrapper/**')
 
+# Bare, root-level filenames also handed to the Claude subprocess's permission deny list.
+BARE_ROOT_FILES = ('AGENTS.md', 'CLAUDE.md')
+
+
+def anchored(pattern):
+    """Root-anchor a bare filename/glob for the Claude subprocess's permission deny list.
+
+    This is the actual root cause of the 2026-10-08 engine-milestone failure: a deny
+    pattern with no '/' in it (e.g. 'build.gradle.kts', meant to protect only the ROOT
+    build file) is matched gitignore-style — at ANY directory depth — by Claude Code's
+    settings.json permission engine, so it also denied edits to app/build.gradle.kts
+    even though that exact path was explicitly granted via Milestone.extra_paths. A
+    pattern already containing a non-trailing '/' (e.g. 'app/build.gradle.kts',
+    'gradle/wrapper/**') is already root-relative under that same matching convention
+    and is returned unchanged. See agent/tests/test_loop.py's PermissionDenyListTests."""
+    return pattern if '/' in pattern else '/' + pattern
+
 
 def checkpoint_allowed(path, extra=()):
     if path.startswith(CREDENTIAL_PREFIXES) or path.endswith(CREDENTIAL_SUFFIXES):
@@ -105,6 +123,109 @@ def load_state(restart):
 
 def missing_env(milestone):
     return [v for v in milestone.required_env if not os.environ.get(v)]
+
+
+def build_deny_list(extra_paths=()):
+    """The Claude subprocess's permission deny list for one milestone. A standalone,
+    directly testable function — see claude(), which just passes this to --settings."""
+    deny = [
+        'Read(.env*)', 'Read(local.properties)', 'Read(**/*.jks)', 'Read(**/*.keystore)',
+        'Edit(agent/**)', 'Write(agent/**)', 'Edit(docs/**)', 'Write(docs/**)',
+        'Edit(.git/**)', 'Write(.git/**)']
+    for name in BARE_ROOT_FILES:
+        deny += [f'Edit({anchored(name)})', f'Write({anchored(name)})']
+    # Gradle/build files stay denied by name; a milestone's extra_paths can lift the deny
+    # for the exact named files it was explicitly scoped to touch (never a glob, and never
+    # the wrapper itself) — verify_scope() still rejects anything else.
+    for pattern in GRADLE_NAMED_FILES:
+        if pattern not in extra_paths:
+            deny += [f'Edit({anchored(pattern)})', f'Write({anchored(pattern)})']
+    for pattern in GRADLE_ALWAYS_PROTECTED_GLOBS:
+        deny += [f'Edit({anchored(pattern)})', f'Write({anchored(pattern)})']
+    return deny
+
+
+# Known agent/loop.py command labels, by suffix, mapped to a human-readable (actor, action)
+# pair for live progress output and STATUS.md — see describe_label().
+LABEL_ACTORS = {
+    'design': ('Claude', 'producing a read-only design recommendation'),
+    'implement': ('Claude', 'implementing the milestone'),
+    'buildfix': ('Claude', 'repairing a build/test/lint/visual-QA failure'),
+    'fix': ('Claude', 'addressing Codex review findings'),
+    'handoff': ('Claude', 'writing a read-only completion handoff'),
+    'diff': ('automated checks', 'running git diff --check'),
+    'gradle': ('automated checks', 'running Gradle assemble/test/lint/connected tests'),
+    'visual': ('automated checks', 'running the emulator screenshot journey'),
+    'codex': ('Codex', 'independently reviewing the diff and screenshots'),
+}
+
+
+def describe_label(label):
+    """('engine', 'Claude', 'implementing the milestone') from a command label like
+    'engine-implement' or 'engine-2-buildfix'. Falls back to a plain description for an
+    unrecognized label rather than guessing."""
+    milestone_key = label.split('-', 1)[0]
+    for suffix, (actor, action) in LABEL_ACTORS.items():
+        if label.endswith('-' + suffix):
+            return milestone_key, actor, action
+    return milestone_key, 'controller', label
+
+
+SECRET_PATTERNS = [
+    re.compile(r'(?i)\b(?:api[_-]?key|token|secret|password)\b\s*[:=]\s*\S+'),
+    re.compile(r'\bAIza[0-9A-Za-z_-]{35}\b'),
+    re.compile(r'\bghp_[A-Za-z0-9]{30,}\b'),
+    re.compile(r'\bxox[baprs]-[A-Za-z0-9-]+\b'),
+    re.compile(r'\bBearer\s+[A-Za-z0-9._-]{10,}\b'),
+    re.compile(r'[A-Za-z0-9+/]{60,}={0,2}'),  # a long base64-looking blob
+]
+
+
+def redact(text):
+    """Best-effort scrub of secret-shaped substrings before any subprocess output is
+    printed to the terminal or written into RUN_LOG.md/STATUS.md. Not a guarantee — real
+    secrets should never be in this project's build output in the first place — but this
+    is the one place raw stdout/stderr is surfaced outside the per-step log file, so it
+    errs toward redacting too much rather than too little."""
+    for pattern in SECRET_PATTERNS:
+        text = pattern.sub('[redacted]', text)
+    return text
+
+
+def tail_summary(path, max_chars=400):
+    """A short, redacted summary of a log file's tail, or '' if it can't be read. Used
+    both for live heartbeats ('here is new output since the last update') and for
+    specific failure reasons, instead of a bare 'see the log' pointer."""
+    try:
+        text = path.read_text(errors='replace')
+    except OSError:
+        return ''
+    text = redact(text)
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        return ''
+    hints = [line for line in lines if re.search(r'FAILED|error:|Exception|Error:|denied', line, re.I)]
+    chosen = hints[-3:] if hints else lines[-3:]
+    summary = ' | '.join(chosen)
+    return summary[:max_chars]
+
+
+def claude_failure_reason(response, label):
+    """A specific reason a claude() call didn't succeed, instead of the previous
+    combined generic 'Claude failed or encountered denied permissions: <label>' message
+    that gave no hint which permission or which path was actually denied."""
+    denials = response.get('permission_denials') or []
+    if denials:
+        described = sorted({
+            f"{d.get('tool_name', '?')}({d.get('tool_input', {}).get('file_path', '?')})"
+            for d in denials
+        })
+        return f"Claude ({label}) was denied permission to: {', '.join(described)}"
+    if response.get('is_error') or response.get('subtype') != 'success':
+        return f"Claude ({label}) did not complete successfully (subtype={response.get('subtype')!r})"
+    if 'BLOCKED' in response.get('result', ''):
+        return f"Claude ({label}) reported BLOCKED"
+    return None
 
 
 def api_config_kt(base_url):
@@ -145,6 +266,10 @@ class Loop:
         self.schema.write_text(json.dumps(SCHEMA))
         self.state = load_state(args.restart)
         self.current_milestone = None
+        self.current_actor = None
+        self.current_action = None
+        self.last_implementation_claim = ''
+        self.last_review = None
 
     def save_state(self):
         STATE_PATH.write_text(json.dumps(self.state, indent=2))
@@ -155,23 +280,36 @@ class Loop:
         if time.monotonic() >= self.deadline:
             raise StopRequested('Total runtime limit reached')
 
+    HEARTBEAT_SECONDS = 30
+
     def command(self, argv, label, timeout=600, stdin=None):
         self.check_stop()
-        self.log('START ' + label)
-        with (self.run / (label + '.log')).open('w') as out:
+        milestone_key, actor, action = describe_label(label)
+        self.current_actor, self.current_action = actor, action
+        log_path = self.run / (label + '.log')
+        self.log(f'START {label} — {milestone_key} · {actor} · {action} (timeout {timeout}s)')
+        start = time.monotonic()
+        last_heartbeat = start
+        with log_path.open('w') as out:
             process = subprocess.Popen(argv, cwd=ROOT, env=self.env, stdin=subprocess.PIPE if stdin else subprocess.DEVNULL,
                                        stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
             try:
                 if stdin:
                     process.stdin.write(stdin.encode()); process.stdin.close()
-                end = time.monotonic() + timeout
+                end = start + timeout
                 while process.poll() is None:
                     self.check_stop()
-                    if time.monotonic() >= end:
-                        raise RuntimeError(label + ' timed out')
+                    now = time.monotonic()
+                    if now - last_heartbeat >= self.HEARTBEAT_SECONDS:
+                        self.heartbeat(milestone_key, actor, action, label, start, end, now)
+                        last_heartbeat = now
+                    if now >= end:
+                        raise RuntimeError(f'{label} timed out after {timeout}s running {action}')
                     time.sleep(1)
                 if process.returncode:
-                    raise RuntimeError(label + ' failed; see ' + str(self.run / (label + '.log')))
+                    summary = tail_summary(log_path)
+                    detail = f': {summary}' if summary else ''
+                    raise RuntimeError(f'{label} failed (exit {process.returncode}, {action}){detail} — see {log_path}')
             finally:
                 if process.poll() is None:
                     os.killpg(process.pid, signal.SIGTERM)
@@ -179,13 +317,115 @@ class Loop:
                         process.wait(timeout=5)
                     except subprocess.TimeoutExpired:
                         os.killpg(process.pid, signal.SIGKILL); process.wait()
-        self.log('DONE ' + label)
+        self.log(f'DONE {label} ({int(time.monotonic() - start)}s)')
+
+    def heartbeat(self, milestone_key, actor, action, label, start, end, now):
+        """A live 'still here' terminal line during a long step — never a fabricated
+        percentage or a claim of progress the controller hasn't actually observed."""
+        elapsed = int(now - start)
+        remaining = max(0, int(end - now))
+        new_output = tail_summary(self.run / (label + '.log'))
+        status = f'last output: {new_output}' if new_output else 'process still running; no new output to show yet'
+        print(f'[{time.strftime("%H:%M:%S")}] {milestone_key} · {actor} · {action} · '
+              f'{elapsed}s elapsed, {remaining}s until step timeout · {status}', flush=True)
+        self.write_status('running')
 
     def log(self, text):
         line = time.strftime('%Y-%m-%d %H:%M:%S') + ' ' + text
         print(line, flush=True)
         with (self.run / 'RUN_LOG.md').open('a') as out:
             out.write(line + '\n')
+
+    def log_handoff_entry(self, milestone, label, review):
+        """A concise, structured RUN_LOG.md entry at each Claude -> checks -> Codex ->
+        Claude handoff: what Claude claimed, what was actually (independently) checked,
+        the review verdict, and what happens next. The raw per-step logs and the Codex
+        review JSON are preserved untouched alongside this summary, not replaced by it."""
+        claim = self.last_implementation_claim.strip().replace('\n', ' ')
+        if len(claim) > 300:
+            claim = claim[:300] + '…'
+        manifest_path = self.run / f'{label}-visual' / 'manifest.json'
+        lines = [
+            '',
+            f'### {milestone.key} / {label} — {time.strftime("%Y-%m-%d %H:%M:%S")}',
+            f'- **Claude\'s implementation claim (not independently verified by itself):** {claim or "(no implement/fix call this round — controller-only step)"}',
+            f'- **Independently checked:** build/test/lint/connected Android tests, and the emulator screenshot journey — see `{self.run / (label + "-gradle.log")}` and `{manifest_path}`.',
+            f'- **Codex review verdict:** {review["verdict"]} — {review["summary"]}',
+        ]
+        if review['findings']:
+            lines.append('- **Findings:**')
+            lines += [f'  - {f}' for f in review['findings']]
+        next_step = {
+            'PASS': 'milestone recorded passed once its checkpoint commit succeeds; controller advances to the next milestone.',
+            'FIX': 'Claude attempts a fix for the findings above; checks and review repeat.',
+            'BLOCKED': 'run stops for diagnosis — see "Current blocker" in agent/runs/STATUS.md.',
+        }[review['verdict']]
+        lines.append(f'- **Next:** {next_step}')
+        lines.append(f'- Raw Codex review: `{self.run / (label + "-review.json")}`')
+        with (self.run / 'RUN_LOG.md').open('a') as out:
+            out.write('\n'.join(lines) + '\n')
+
+    def _is_pushed(self, commit):
+        if not commit:
+            return 'n/a (no checkpoint yet)'
+        try:
+            upstream = subprocess.check_output(
+                ['git', 'rev-parse', '@{u}'], cwd=ROOT, stderr=subprocess.DEVNULL).decode().strip()
+        except subprocess.CalledProcessError:
+            return 'unknown (no upstream tracking branch configured)'
+        return 'yes' if upstream == commit else 'no (local only — the controller never pushes automatically)'
+
+    def write_status(self, state_label, blocker=None, needs_user_action=False, next_step=None):
+        """Rewrites agent/runs/STATUS.md (controller-owned, gitignored) so the current
+        state of a run is understandable without reading source or logs. Called on
+        start, on every heartbeat, after every review, and on exit."""
+        commit = self.head.decode().strip() if isinstance(self.head, bytes) else str(self.head)
+        completed = [k for k in milestones.MILESTONE_ORDER if self.state.get(k) == 'passed']
+        remaining = [k for k in milestones.MILESTONE_ORDER if self.state.get(k) != 'passed']
+        lines = [
+            '# Autonomous loop status', '',
+            '_Controller-generated; overwritten throughout the run. A stale timestamp below'
+            ' does not by itself prove a process is still running — check that a'
+            ' `python3 agent/loop.py` process actually exists (e.g. `pgrep -fl agent/loop.py`)'
+            ' before assuming so._', '',
+            f'- Run ID: `{self.run.name}`',
+            f'- Last updated: {time.strftime("%Y-%m-%d %H:%M:%S")}',
+            f'- State: **{state_label}**',
+        ]
+        if self.current_milestone:
+            lines += [
+                f'- Current milestone: `{self.current_milestone}`',
+                f'- Current actor: {self.current_actor or "—"}',
+                f'- Current action: {self.current_action or "—"}',
+            ]
+        else:
+            lines.append('- Current milestone: none (between milestones, or not yet started)')
+        lines += [
+            '', '## Milestones',
+            '- Completed: ' + (', '.join(completed) if completed else 'none yet'),
+            '- Remaining: ' + (', '.join(remaining) if remaining else 'none — all passed'),
+        ]
+        for key in milestones.MILESTONE_ORDER:
+            lines.append(f'  - `{key}`: {self.state.get(key, "not started")}')
+        lines += ['', '## Latest verified result']
+        if self.last_review:
+            lines.append(
+                f'- `{self.last_review["milestone"]}` / `{self.last_review["label"]}` — '
+                f'verdict **{self.last_review["verdict"]}**: {self.last_review["summary"]}')
+            lines.append(f'  - Evidence: `{self.last_review["log"]}`, `{self.last_review["manifest"]}`')
+        else:
+            lines.append('- No milestone has completed a review yet in this run.')
+        lines += ['', '## Current blocker', f'- {blocker}' if blocker else '- None.']
+        lines += ['', '## Is user action needed?']
+        lines.append(f'- **Yes** — {next_step}' if needs_user_action else '- No — the controller is proceeding on its own.')
+        lines += [
+            '', '## Checkpoint',
+            f'- Latest commit: `{commit[:12]}`',
+            f'- Pushed to remote: {self._is_pushed(commit)}',
+        ]
+        status_path = ROOT / 'agent/runs/STATUS.md'
+        status_path.parent.mkdir(parents=True, exist_ok=True)
+        status_path.write_text('\n'.join(lines) + '\n')
 
     def write_controlled(self, rel_path, content):
         """Write a controller-owned file (acceptance criteria, generated config, the
@@ -233,21 +473,8 @@ class Loop:
 
     def claude(self, prompt, label, readonly=False, extra_paths=()):
         tools = 'Read,Glob,Grep' if readonly else 'Read,Glob,Grep,Edit,Write'
-        deny = [
-            'Read(.env*)', 'Read(local.properties)', 'Read(**/*.jks)', 'Read(**/*.keystore)',
-            'Edit(agent/**)', 'Write(agent/**)', 'Edit(docs/**)', 'Write(docs/**)',
-            'Edit(AGENTS.md)', 'Write(AGENTS.md)', 'Edit(CLAUDE.md)', 'Write(CLAUDE.md)',
-            'Edit(.git/**)', 'Write(.git/**)']
-        # Gradle/build files stay denied by name; a milestone's extra_paths can lift the
-        # deny for the exact named files it was explicitly scoped to touch (never a glob,
-        # and never the wrapper itself) — verify_scope() still rejects anything else.
-        for pattern in GRADLE_NAMED_FILES:
-            if pattern not in extra_paths:
-                deny += [f'Edit({pattern})', f'Write({pattern})']
-        for pattern in GRADLE_ALWAYS_PROTECTED_GLOBS:
-            deny += [f'Edit({pattern})', f'Write({pattern})']
         # Restricted mode confines file tools to the workspace. No shell, plugins or MCP.
-        settings = {'disableAllHooks': True, 'permissions': {'deny': deny}}
+        settings = {'disableAllHooks': True, 'permissions': {'deny': build_deny_list(extra_paths)}}
         argv = ['claude', '-p', prompt, '--restricted', '--safe-mode', '--permission-mode', 'dontAsk',
                 '--permission-prompts', 'none', '--tools', tools, '--allowedTools', tools,
                 '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
@@ -255,12 +482,12 @@ class Loop:
                 '--max-budget-usd', str(self.args.claude_budget)]
         self.command(argv, label, timeout=900)
         response = json.loads((self.run / (label + '.log')).read_text())
-        if response.get('is_error') or response.get('subtype') != 'success' or response.get('permission_denials'):
-            raise RuntimeError('Claude failed or encountered denied permissions: ' + label)
-        if 'BLOCKED' in response.get('result', ''):
-            raise RuntimeError('Claude reported BLOCKED; inspect ' + label)
+        reason = claude_failure_reason(response, label)
+        if reason:
+            raise RuntimeError(f'{reason} — see {self.run / (label + ".log")}')
         self.verify_scope(extra_paths)
-        return response.get('result', '')
+        self.last_implementation_claim = response.get('result', '')
+        return self.last_implementation_claim
 
     def gates(self, milestone, label):
         self.command(['git', 'diff', '--check'], f'{label}-diff')
@@ -297,7 +524,15 @@ class Loop:
         # one Gradle dependency) — that diff is still outstanding until checkpoint(),
         # so verify_scope must be told about it here too or it misreads it as a violation.
         self.verify_scope(milestone.extra_paths)
-        return validate_review(json.loads(output.read_text()))
+        review = validate_review(json.loads(output.read_text()))
+        self.last_review = {
+            'milestone': milestone.key, 'label': label, 'verdict': review['verdict'],
+            'summary': review['summary'], 'log': str(self.run / f'{label}-codex.log'),
+            'manifest': destination_manifest(self.run, label),
+        }
+        self.log_handoff_entry(milestone, label, review)
+        self.write_status('running')
+        return review
 
     def write_launch_checklist(self):
         lines = [
@@ -329,6 +564,7 @@ class Loop:
         self.current_milestone = milestone.key
         extra = milestone.extra_paths
         self.log('MILESTONE START ' + milestone.key)
+        self.write_status('running')
         context = 'Read CLAUDE.md, docs/PRODUCT_VISION.md, docs/LAUNCH_CRITERIA.md, agent/CURRENT_TASK.md. '
         if milestone.design_brief:
             self.write_controlled('agent/CURRENT_TASK.md', milestone.design_brief.rstrip() + '\n')
@@ -389,6 +625,8 @@ class Loop:
                 self.state[milestone.key] = 'passed'
                 self.save_state()
                 self.log('MILESTONE PASS ' + milestone.key + (' commit ' + commit if commit else ' (nothing to commit)'))
+                self.current_milestone = None
+                self.write_status('running')
                 return
             if review_round >= self.args.max_reviews:
                 raise RuntimeError(milestone.key + ': review retry limit reached')
@@ -420,6 +658,65 @@ def destination_manifest(run, label):
     return str(run / f'{label}-visual' / 'manifest.json')
 
 
+def print_exit_summary(state_label, reason, commit, checkpoint_note, serial):
+    """The plain-language explanation printed on exit: why it stopped, what was saved,
+    what remains unverified, and how to resume. Separate from the terminal RUN_LOG.md
+    trail so it reads as a summary even if the scrollback above has been lost."""
+    print()
+    print('=' * 70)
+    if state_label == 'complete':
+        print('Run complete.')
+        print('See agent/runs/STATUS.md for the final milestone-by-milestone outcome,')
+        print('and this run\'s RUN_LOG.md for the detailed handoff trail.')
+        print('Nothing was pushed automatically — review the checkpoint commits yourself before pushing.')
+    else:
+        verb = {'stopped': 'Stopped', 'failed': 'Failed'}[state_label]
+        print(f'{verb}: {reason}')
+        if checkpoint_note == 'saved':
+            print(f'Work up to this point was saved in a local, unpushed WIP checkpoint commit ({commit[:12]}).')
+        elif checkpoint_note == 'nothing_to_save':
+            print('No new WIP checkpoint was needed — nothing uncommitted needed saving.')
+        elif checkpoint_note == 'failed':
+            print('A WIP checkpoint could not be made — see RUN_LOG.md for why; nothing was discarded, but it is not yet committed.')
+        elif checkpoint_note == 'left_uncommitted':
+            print('Left uncommitted on purpose — a scope violation is not auto-committed; a human should')
+            print('inspect the unexpected change before anything is folded into Git history.')
+        print('Nothing beyond the last checkpoint has been independently verified by Codex.')
+        print(f'To resume: remove agent/STOP if present, then rerun: python3 agent/loop.py --serial {serial}')
+    print('A timestamp in agent/runs/STATUS.md does not by itself prove a process is still')
+    print('alive — check that a `python3 agent/loop.py` process actually exists')
+    print('(e.g. `pgrep -fl agent/loop.py`) before assuming the run is still going.')
+    print('=' * 70)
+
+
+def abort(loop_obj, args, state_label, reason, make_checkpoint, next_step):
+    """Shared exit path for every non-success stop (scope violation, STOP file/timeout,
+    Ctrl+C, or a genuine error): logs it, optionally WIP-checkpoints, updates
+    STATUS.md, and prints the plain-language summary. Returns the process exit code."""
+    loop_obj.log(f'STOP ({state_label}): {reason}')
+    commit = None
+    if make_checkpoint:
+        try:
+            commit = loop_obj.checkpoint_wip()
+            if commit:
+                loop_obj.log('WIP checkpoint committed: ' + commit)
+                checkpoint_note = 'saved'
+            else:
+                checkpoint_note = 'nothing_to_save'
+        except Exception as checkpoint_exc:
+            loop_obj.log('WIP checkpoint failed: ' + str(checkpoint_exc))
+            checkpoint_note = 'failed'
+    else:
+        loop_obj.log('Left uncommitted for inspection (scope violation) — nothing staged or committed.')
+        checkpoint_note = 'left_uncommitted'
+    try:
+        loop_obj.write_status(state_label, blocker=reason, needs_user_action=True, next_step=next_step)
+    except Exception as status_exc:
+        loop_obj.log('STATUS.md update failed: ' + str(status_exc))
+    print_exit_summary(state_label, reason, commit, checkpoint_note, args.serial)
+    return 1
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--serial', required=True, help='Explicit emulator serial; physical devices are refused')
@@ -442,20 +739,26 @@ def main():
         except BlockingIOError:
             parser.error('Another loop is running')
         loop = Loop(args)
+        loop.write_status('running')
         try:
             loop.execute()
         except ScopeViolation as exc:
-            loop.log('STOP (left uncommitted for inspection): ' + str(exc))
-            return 1
-        except (Exception, KeyboardInterrupt) as exc:
-            loop.log('STOP: ' + str(exc))
-            try:
-                commit = loop.checkpoint_wip()
-                if commit:
-                    loop.log('WIP checkpoint committed: ' + commit)
-            except Exception as checkpoint_exc:
-                loop.log('WIP checkpoint failed: ' + str(checkpoint_exc))
-            return 1
+            return abort(loop, args, 'failed', str(exc), make_checkpoint=False,
+                         next_step='Inspect the forbidden-path change by hand (see RUN_LOG.md and the '
+                                   'step log named in the error above). Nothing was committed. Resolve '
+                                   'it — or revert the unexpected change — then rerun.')
+        except StopRequested as exc:
+            return abort(loop, args, 'stopped', str(exc), make_checkpoint=True,
+                         next_step=f'Remove agent/STOP if present, then rerun: python3 agent/loop.py --serial {args.serial}')
+        except KeyboardInterrupt:
+            return abort(loop, args, 'stopped', 'Interrupted by Ctrl+C', make_checkpoint=True,
+                         next_step=f'Rerun when ready: python3 agent/loop.py --serial {args.serial}')
+        except Exception as exc:
+            return abort(loop, args, 'failed', str(exc), make_checkpoint=True,
+                         next_step='Read the specific failure reason above (and its referenced log), fix '
+                                    f'the underlying cause, then rerun: python3 agent/loop.py --serial {args.serial}')
+        loop.write_status('complete')
+        print_exit_summary('complete', None, None, None, args.serial)
     return 0
 
 
