@@ -524,6 +524,49 @@ class RealGitCheckpointTests(unittest.TestCase):
             result = controller.review(milestone, 'engine-1', ['fake.png'])
         self.assertEqual(result['verdict'], 'PASS')
 
+    def test_review_terminates_options_before_stdin_prompt_marker(self):
+        # Regression for agent/runs/20261008-232219: codex exited with "Reading prompt
+        # from stdin... No prompt provided via stdin." because the prompt followed a
+        # variadic `--image <FILE>...` option with no `--` boundary, so clap swallowed
+        # the trailing positional prompt string into the image list instead of treating
+        # it as PROMPT. Not a mocked proof that Codex itself will succeed — only that
+        # loop.py now constructs the argv/stdin codex's own `exec --help` documents.
+        controller = self._controller()
+        milestone = fake_milestone(key='engine', extra_paths=())
+        output_path = controller.run / 'engine-1-review.json'
+        output_path.write_text(json.dumps(dict(verdict='PASS', summary='ok', findings=[], visual_reviewed=True)))
+        images = [Path(f'/fake/{i}.png') for i in range(3)]  # multiple screenshots
+        with patch.object(controller, 'command') as command:
+            controller.review(milestone, 'engine-1', images)
+        argv, label = command.call_args.args
+        kwargs = command.call_args.kwargs
+        self.assertEqual(label, 'engine-1-codex')
+
+        # Argument boundary: '--' unambiguously ends option/variadic parsing, and the
+        # sole positional after it is '-' (codex's documented "read PROMPT from stdin").
+        self.assertEqual(argv[-2:], ['--', '-'])
+        end_of_options = len(argv) - 2
+        self.assertEqual(argv.count('--image'), len(images))
+        for image in images:
+            self.assertIn(str(image), argv[:end_of_options])  # every screenshot preserved
+        self.assertNotIn(str(images[-1]), argv[end_of_options:])  # none bleed past the boundary
+
+        # Preserved: read-only sandbox, output schema, existing auth/config flags.
+        self.assertIn('--sandbox', argv)
+        self.assertEqual(argv[argv.index('--sandbox') + 1], 'read-only')
+        self.assertIn('--output-schema', argv)
+        self.assertIn('--ignore-user-config', argv)
+        self.assertIn('--ignore-rules', argv)
+
+        # The complete prompt is delivered whole through stdin, not as an argv token.
+        prompt = kwargs.get('stdin')
+        self.assertTrue(prompt)
+        self.assertNotIn(prompt, argv)
+        self.assertIn('milestone "engine"', prompt)
+        self.assertIn('Inspect every attached screenshot.', prompt)
+        self.assertTrue(prompt.rstrip().endswith('Do not modify files.'))
+        self.assertEqual(kwargs.get('timeout'), 900)
+
     def test_handoff_claude_call_does_not_flag_milestones_own_extra_path_change(self):
         controller = self._controller()
         controller.args = SimpleNamespace(claude_budget=3.0)

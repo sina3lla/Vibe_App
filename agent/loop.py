@@ -560,8 +560,14 @@ class Loop:
                 '--output-last-message', str(output)]
         for path in images:
             argv.extend(['--image', str(path)])
-        argv.append(prompt)
-        self.command(argv, f'{label}-codex', timeout=900)
+        # `--image <FILE>...` is variadic, so a trailing positional PROMPT argument with
+        # no leading '-' is ambiguous — codex's clap parser swallows it into the image
+        # list instead of treating it as PROMPT, then falls back to (empty) stdin and
+        # fails with "No prompt provided via stdin." `--` ends option/variadic parsing
+        # unambiguously; the lone `-` after it is the documented way to tell codex to
+        # read PROMPT from stdin, which command() supplies via stdin=prompt below.
+        argv += ['--', '-']
+        self.command(argv, f'{label}-codex', timeout=900, stdin=prompt)
         # Codex is read-only and writes nothing, but a prior Claude call in this same
         # milestone may legitimately have touched milestone.extra_paths (e.g. engine's
         # one Gradle dependency) — that diff is still outstanding until checkpoint(),
