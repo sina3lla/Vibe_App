@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.eso1.ui.engine.EngineHarness
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -131,6 +132,8 @@ fun HomeScreen(
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(top = 4.dp)
                 )
+                Spacer(modifier = Modifier.height(24.dp))
+                EngineHarness()
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
