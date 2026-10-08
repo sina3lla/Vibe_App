@@ -699,6 +699,23 @@ class PermissionDenyListTests(unittest.TestCase):
         self.assertIn('app/build.gradle.kts', reason)
         self.assertIn('Edit', reason)
 
+    def test_claude_failure_reason_names_a_glob_denial_target_not_a_bare_question_mark(self):
+        # Regression for the actual 2026-10-08 failure shape: a Glob denial has no
+        # file_path (Glob uses pattern/path), so the old code rendered this as the
+        # useless 'Glob(?)'. See agent/runs/20261008-223002/engine-1-buildfix.log.
+        response = {
+            'is_error': False, 'subtype': 'success',
+            'permission_denials': [
+                {'tool_name': 'Glob', 'tool_input': {'pattern': '**/filament-android*', 'path': '/Users/lelu'}},
+            ],
+            'result': 'tried to search outside the repo',
+        }
+        reason = loop.claude_failure_reason(response, 'engine-1-buildfix')
+        self.assertIn('Glob', reason)
+        self.assertIn('filament-android', reason)
+        self.assertIn('/Users/lelu', reason)
+        self.assertNotIn('Glob(?)', reason)
+
     def test_claude_failure_reason_distinguishes_error_subtype_from_blocked(self):
         error_reason = loop.claude_failure_reason(
             {'is_error': True, 'subtype': 'error', 'permission_denials': [], 'result': ''}, 'core-implement')
@@ -722,6 +739,83 @@ class PermissionDenyListTests(unittest.TestCase):
     def test_redact_leaves_ordinary_build_output_alone(self):
         text = '> Task :app:compileDebugKotlin\nBUILD SUCCESSFUL in 4s'
         self.assertEqual(loop.redact(text), text)
+
+
+class DynamicVersionGuardTests(unittest.TestCase):
+    """Regression coverage for agent/runs/20261008-223002: an unresolved dependency pin
+    was 'repaired' into a dynamic/wildcard version ('1.+') instead of being verified.
+    find_dynamic_versions() is a mechanical, fail-fast guard — not just brief wording."""
+
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.repo = Path(self.tempdir.name)
+        (self.repo / 'gradle').mkdir()
+        self._root_patch = patch.object(loop, 'ROOT', self.repo)
+        self._root_patch.start()
+
+    def tearDown(self):
+        self._root_patch.stop()
+        self.tempdir.cleanup()
+
+    def test_catches_plus_wildcard_version(self):
+        (self.repo / 'gradle/libs.versions.toml').write_text('filament = "1.+"\n')
+        problems = loop.find_dynamic_versions(('gradle/libs.versions.toml',))
+        self.assertEqual(len(problems), 1)
+        self.assertIn('gradle/libs.versions.toml:1', problems[0])
+        self.assertIn('1.+', problems[0])
+
+    def test_catches_latest_release_keyword(self):
+        (self.repo / 'gradle/libs.versions.toml').write_text('filament = "latest.release"\n')
+        self.assertTrue(loop.find_dynamic_versions(('gradle/libs.versions.toml',)))
+
+    def test_exact_pin_passes_clean(self):
+        (self.repo / 'gradle/libs.versions.toml').write_text('filament = "1.56.0"\n')
+        self.assertEqual(loop.find_dynamic_versions(('gradle/libs.versions.toml',)), [])
+
+    def test_ignores_commented_out_lines(self):
+        (self.repo / 'gradle/libs.versions.toml').write_text(
+            '# old value was "1.+", do not reuse\nfilament = "1.56.0"\n')
+        self.assertEqual(loop.find_dynamic_versions(('gradle/libs.versions.toml',)), [])
+
+    def test_only_scans_the_granted_extra_paths(self):
+        (self.repo / 'gradle/libs.versions.toml').write_text('filament = "1.56.0"\n')
+        (self.repo / 'app').mkdir()
+        (self.repo / 'app/build.gradle.kts').write_text('implementation("x:y:1.+")\n')
+        # Only the path actually passed is scanned — this mirrors gates() only ever
+        # scanning milestone.extra_paths, never the whole repository.
+        self.assertEqual(loop.find_dynamic_versions(('gradle/libs.versions.toml',)), [])
+        self.assertTrue(loop.find_dynamic_versions(('app/build.gradle.kts',)))
+
+    def test_missing_file_is_not_an_error(self):
+        self.assertEqual(loop.find_dynamic_versions(('gradle/libs.versions.toml',)), [])
+
+    def test_gates_fails_fast_before_running_gradle(self):
+        (self.repo / 'gradle/libs.versions.toml').write_text('filament = "1.+"\n')
+        (self.repo / 'agent').mkdir()
+        controller = object.__new__(loop.Loop)
+        controller.run = self.repo / 'agent/runs/testrun'
+        controller.run.mkdir(parents=True)
+        controller.args = SimpleNamespace(serial='emulator-5554')
+        milestone = fake_milestone(key='engine', extra_paths=('gradle/libs.versions.toml',))
+        with patch.object(controller, 'command') as command:
+            with self.assertRaisesRegex(RuntimeError, 'Dynamic/unpinned dependency version'):
+                controller.gates(milestone, 'engine-1')
+            # Only the git-diff-check call happened; Gradle/visual QA were never reached.
+            self.assertEqual(command.call_count, 1)
+
+    def test_gates_proceeds_past_the_guard_with_an_exact_pin(self):
+        (self.repo / 'gradle/libs.versions.toml').write_text('filament = "1.56.0"\n')
+        (self.repo / 'agent').mkdir()
+        controller = object.__new__(loop.Loop)
+        controller.run = self.repo / 'agent/runs/testrun'
+        controller.run.mkdir(parents=True)
+        controller.args = SimpleNamespace(serial='emulator-5554')
+        milestone = fake_milestone(key='engine', extra_paths=('gradle/libs.versions.toml',))
+        with patch.object(controller, 'command') as command:  # no visual dir ever created
+            with self.assertRaisesRegex(RuntimeError, 'No visual evidence'):
+                controller.gates(milestone, 'engine-1')
+            # diff-check + gradle + visual = 3 calls; the guard didn't short-circuit.
+            self.assertEqual(command.call_count, 3)
 
 
 class StatusAndReportingTests(unittest.TestCase):

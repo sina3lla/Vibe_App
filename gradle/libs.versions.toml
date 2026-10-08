@@ -9,10 +9,14 @@ activityCompose = "1.8.0"
 kotlin = "2.2.10"
 composeBom = "2026.02.01"
 camerax = "1.6.2"
-# Dynamic on purpose: the previously pinned 1.56.5 does not exist on Maven
-# Central/Google's repo (unverified carry-over from an earlier checkpoint).
-# Pin to a specific verified patch once one has been confirmed resolvable.
-filament = "1.+"
+# Verified against Maven Central's maven-metadata.xml for
+# com.google.android.filament:filament-android (1.56.5 does not exist there and
+# never resolved; 1.56.0 does, and its POM/AAR both return HTTP 200). See
+# docs/decisions/3D_ENGINE_EVALUATION.md for the full verification record and
+# compatibility notes. Never set this back to a dynamic/wildcard version (e.g.
+# "1.+", "latest.release"); replace it only with another version confirmed the
+# same way and re-document the source.
+filament = "1.56.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

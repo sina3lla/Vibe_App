@@ -210,22 +210,58 @@ def tail_summary(path, max_chars=400):
     return summary[:max_chars]
 
 
+def describe_denial(denial):
+    """A readable '<Tool>(<target>)' for one permission_denials entry. Different tools
+    put their target under different keys (Edit/Write use file_path; Glob/Grep use
+    pattern/path) — a naive `.get('file_path', '?')` renders a Glob denial as the
+    useless 'Glob(?)', as seen in agent/runs/20261008-223002/engine-1-buildfix.log."""
+    tool_name = denial.get('tool_name', '?')
+    tool_input = denial.get('tool_input') or {}
+    if 'file_path' in tool_input:
+        target = tool_input['file_path']
+    else:
+        parts = [f'{k}={v}' for k, v in tool_input.items() if k in ('pattern', 'path')]
+        target = ', '.join(parts) if parts else '?'
+    return f'{tool_name}({target})'
+
+
 def claude_failure_reason(response, label):
     """A specific reason a claude() call didn't succeed, instead of the previous
     combined generic 'Claude failed or encountered denied permissions: <label>' message
     that gave no hint which permission or which path was actually denied."""
     denials = response.get('permission_denials') or []
     if denials:
-        described = sorted({
-            f"{d.get('tool_name', '?')}({d.get('tool_input', {}).get('file_path', '?')})"
-            for d in denials
-        })
+        described = sorted({describe_denial(d) for d in denials})
         return f"Claude ({label}) was denied permission to: {', '.join(described)}"
     if response.get('is_error') or response.get('subtype') != 'success':
         return f"Claude ({label}) did not complete successfully (subtype={response.get('subtype')!r})"
     if 'BLOCKED' in response.get('result', ''):
         return f"Claude ({label}) reported BLOCKED"
     return None
+
+
+DYNAMIC_VERSION_PATTERN = re.compile(r'["\']([^"\']*\+[^"\']*|latest\.release|latest\.integration)["\']')
+
+
+def find_dynamic_versions(extra_paths):
+    """Scan a milestone's own granted files (never anything outside them) for a
+    dynamic/wildcard dependency version ('1.+', 'latest.release', 'latest.integration').
+    Returns a list of 'path:line: content' strings, empty if none found. This is a
+    mechanical, fail-fast guard — not just brief wording — for exactly the mistake in
+    agent/runs/20261008-223002/engine-1-buildfix.log (an unresolved pin was patched to
+    a dynamic range instead of being verified)."""
+    problems = []
+    for rel_path in extra_paths:
+        path = ROOT / rel_path
+        if not path.is_file():
+            continue
+        for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith('#'):
+                continue
+            if DYNAMIC_VERSION_PATTERN.search(line):
+                problems.append(f'{rel_path}:{lineno}: {stripped}')
+    return problems
 
 
 def api_config_kt(base_url):
@@ -491,6 +527,13 @@ class Loop:
 
     def gates(self, milestone, label):
         self.command(['git', 'diff', '--check'], f'{label}-diff')
+        if milestone.extra_paths:
+            dynamic = find_dynamic_versions(milestone.extra_paths)
+            if dynamic:
+                # Fail fast, before spending a Gradle run, on exactly the mistake in
+                # agent/runs/20261008-223002: a dynamic/wildcard version instead of a
+                # verified exact pin.
+                raise RuntimeError('Dynamic/unpinned dependency version(s) are not allowed: ' + '; '.join(dynamic))
         self.command(['./gradlew', '--no-daemon', 'assembleDebug', 'test', 'lintDebug', 'connectedDebugAndroidTest'], f'{label}-gradle', timeout=900)
         destination = self.run / f'{label}-visual'
         self.command([sys.executable, str(ROOT / 'agent/visual_qa.py'), '--serial', self.args.serial,
@@ -604,7 +647,13 @@ class Loop:
                     raise RuntimeError(f'{milestone.key}: build/test/lint/visual repair limit reached: {exc}')
                 self.log(f'GATE FAILURE {milestone.key}: {exc}')
                 self.claude(context + f'Build, test, lint, or the scripted interaction journey failed: {exc}. '
-                            'Fix the underlying problem; stay within the current task.', f'{label}-buildfix',
+                            'Fix the underlying problem; stay within the current task. Your tools are already '
+                            'confined to this repository — do not attempt to search, read, or guess at anything '
+                            'outside it (e.g. the home directory) to work around a failure; that will be denied '
+                            'and wastes the attempt. Never resolve an unresolved/unverified dependency version by '
+                            'switching to a dynamic or wildcard constraint (e.g. "1.+", "latest.release") — if you '
+                            'cannot verify an exact version from inside the repository, state precisely what '
+                            'needs external verification in your completion report instead.', f'{label}-buildfix',
                             extra_paths=extra)
                 continue
             if milestone.key == 'release':
