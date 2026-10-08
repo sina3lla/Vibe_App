@@ -9,7 +9,10 @@ activityCompose = "1.8.0"
 kotlin = "2.2.10"
 composeBom = "2026.02.01"
 camerax = "1.6.2"
-filament = "1.56.5"
+# Dynamic on purpose: the previously pinned 1.56.5 does not exist on Maven
+# Central/Google's repo (unverified carry-over from an earlier checkpoint).
+# Pin to a specific verified patch once one has been confirmed resolvable.
+filament = "1.+"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

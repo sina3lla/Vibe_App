@@ -4,36 +4,24 @@ Captured verbatim from the design-phase agent response below. This is a working 
 
 ---
 
-## Recommendation: Google Filament (`com.google.android.filament:filament-android`)
+## Recommendation: Filament, single core dependency + a locally-compiled material asset (no second runtime dependency)
 
-**Dependency to add** (version catalog + one line in `app/build.gradle.kts`):
+**Add to `gradle/libs.versions.toml`** (the `filament = "1.56.5"` version and `filament-android` library entry are already staged there, unused in `app/build.gradle.kts` — likely left over from the interrupted WIP checkpoint):
 
-```toml
-# gradle/libs.versions.toml
-[versions]
-filament = "1.56.5"  # verify against Maven Central before pinning — I have no live network access to confirm this is current
-
-[libraries]
-filament-android = { group = "com.google.android.filament", name = "filament-android", version.ref = "filament" }
+```
+implementation(libs.filament.android)   // com.google.android.filament:filament-android:1.56.5
 ```
 
-```kotlin
-// app/build.gradle.kts
-implementation(libs.filament.android)
-```
+That one AAR is the ceiling I'd spend. I'd avoid adding `gltfio-android` as a second dependency: it's tempting as a source of a "free" ubershader material, but its `MaterialProvider`/`UbershaderProvider` is designed around gltfio's own glTF-loading pipeline, and I'm not confident enough (without having run it) that it's a supported, stable way to get a standalone `MaterialInstance` for a hand-built renderable outside that pipeline. Filament's own official Android sample ("hello-triangle") renders a real shaded object with `filament-android` alone, by compiling a minimal material once with `matc` (Filament's standalone material compiler binary, downloaded from the Filament GitHub releases — not a Gradle plugin, not NDK/CMake, not a new IDE toolchain) and checking the compiled `.filamat` blob into the repo as a static asset (e.g. `app/src/main/assets/materials/unlit.filamat`), loaded at runtime via `Material.Builder().payload(...)`. This is the well-precedented, lower-risk path versus the gltfio route, so it's what I'd commit to for this milestone.
 
-That's the entire integration cost: one prebuilt AAR (native `.so`s are bundled inside it), no CMake/NDK project, no second IDE toolchain, no AR/ARCore transitive pull-in (unlike `sceneview-android`, which wraps Filament but drags in ARCore and extras this milestone doesn't need).
+**Geometry/material plan to satisfy "an actual visible 3D object":** a single procedurally defined mesh (e.g. a unit cube or icosahedron) built from inline vertex/index arrays in Kotlin via `VertexBuffer`/`IndexBuffer`/`RenderableManager`, shaded with the one compiled unlit/lit material above. Zero imported models or textures — this trivially clears the asset-licensing bar since there is no external asset beyond a compiled shader program you wrote yourself.
 
-### Why this fits each constraint
+**Main trade-off I'm accepting:** running `matc` is a one-time, non-Gradle, manual binary step (platform-specific tool, its output committed as a binary asset) rather than something Gradle resolves automatically. The engine milestone needs to document which `matc` build was used and keep the source `.mat` file next to the compiled output so it's reproducible — this is a real manual-process dependency the orchestrator should be aware of, even though it touches no build file this task isn't scoped to edit.
 
-- **Performance**: Filament is a tile-based, PBR forward/deferred renderer built for mobile; you can run its `Choreographer` loop on-demand (render only when the scene actually changes) rather than continuously, which matches the brief's "mostly-static scene with occasional animated accents" framing and keeps thermal/battery cost close to the static-scene case rather than the persistent-scene case. This still needs to be *measured*, not assumed.
-- **Accessibility / controller compatibility**: Filament only owns a rendering surface (`SurfaceView`/`TextureView`), not input or UI. The scene is hosted via `AndroidView` inside a Compose `Box`; every tappable control stays a real Compose composable layered on top with `Modifier.testTag(...)`, so TalkBack and `agent/visual_qa.py`'s resource-id tap automation keep working untouched. The script already reserves an `engine-canvas` tag for this milestone — the Filament surface itself should carry that tag.
-- **Asset licensing**: Start with code-generated primitive/procedural geometry (spheres, extruded shapes, simple glTF built at build time if needed) rather than importing third-party `.glb`/`.fbx` models, avoiding the temptation CURRENT_TASK flags. Core `filament-android` alone is a few MB; avoid adding `gltfio-android`/`filament-utils` unless an actual asset pipeline is approved, to keep APK size down.
-- **Automated verification**: No new verification mechanism — same adb/uiautomator screenshot-and-tap journey, same testTag contract.
-- **Integration cost**: Single Gradle coordinate, no native build system.
+**Performance:** Filament's render loop is a persistent GL context; even a static single-object scene costs continuous Choreographer-driven frame submission. For a mostly-static scene with occasional animated accents, the engine should render on-demand (invalidate/request a frame only when something changes, pause the loop in `onPause`/`onStop`) rather than free-running at 60fps, to keep idle thermal/battery cost near zero. I have not measured this on a physical mid-range device — treat the budget as unverified until it's profiled there, not the emulator.
 
-### Trade-off accepted
-Filament brings real engine complexity (materials, lighting, fog, camera) versus a bare `GLSurfaceView` + hand-rolled OpenGL ES, which would have zero dependency footprint but would require reimplementing PBR/lighting/fog from scratch to achieve the "magical surreal" look and the dual bright/dark scene lighting requirement in `WORLD_DESIGN.md`. Filament's built-in lighting/fog/material system directly serves that requirement at the cost of added APK size (needs real measurement, likely several MB before ABI splitting) and a steeper learning curve than raw GL.
+**Accessibility:** the Filament surface mounts via `AndroidView` inside Compose and must be marked non-accessible/decorative (e.g. cleared semantics) so TalkBack skips the opaque render; every interactive control stays a real Compose composable positioned over/beside it. Reduced motion means: no continuous rotation/camera motion, a single static lit object — satisfiable trivially with this minimal scene.
 
-### Confidence
-This is a paper evaluation only — I have not run Filament on any device or emulator in this repo, so frame-time, thermal, and actual APK-size numbers are unverified. The next milestone should land a minimal scene (a few lit primitives, on-demand render loop, one Compose button overlay tagged `engine-canvas`) and profile it on a real mid-range device before any further 3D investment. Treat this as a working recommendation for that milestone, not an approved architecture.
+**Automated verification:** `agent/visual_qa.py` already expects an `engine-canvas` test tag for this exact milestone and only interacts via the accessibility tree (uiautomator dump), so it never needs to "see" the GL surface itself — it just needs the wrapping composable to carry `Modifier.testTag("engine-canvas")` and report `enabled="true"` in the dump. Worth flagging as an unverified detail: a plain non-clickable `AndroidView` wrapper may or may not report `enabled=true` by default in the dump; the implementing milestone should confirm this empirically on the emulator rather than assume it.
+
+**Confidence:** this is a working recommendation for the next bounded milestone, not a verified result — I haven't run Filament on real hardware or confirmed the `matc`-compiled-material path compiles clean end-to-end in this exact project; the implementing milestone should treat both the frame-time budget and the `enabled` semantics detail above as open risks to close first.
