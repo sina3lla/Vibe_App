@@ -46,6 +46,11 @@ class ScopeViolation(RuntimeError):
     """Claude touched a forbidden path or git state changed unexpectedly; left uncommitted for inspection."""
 
 
+class StatusContractError(RuntimeError):
+    """A Claude response's STATUS: line was missing, duplicated, or BLOCKED without a
+    REASON: — a malformed contract, never silently treated as OK or as BLOCKED."""
+
+
 def validate_review(value):
     if set(value) != set(SCHEMA['required']):
         raise RuntimeError('Malformed review fields')
@@ -226,18 +231,72 @@ def describe_denial(denial):
 
 
 def claude_failure_reason(response, label):
-    """A specific reason a claude() call didn't succeed, instead of the previous
-    combined generic 'Claude failed or encountered denied permissions: <label>' message
-    that gave no hint which permission or which path was actually denied."""
+    """A specific reason a claude() call didn't succeed at the infrastructure level
+    (permission denial, non-success subtype) — instead of the previous combined generic
+    'Claude failed or encountered denied permissions: <label>' message that gave no hint
+    which permission or which path was actually denied.
+
+    This deliberately does NOT look for the word BLOCKED anywhere in the response text.
+    That used to be a substring search over the whole narrative, which false-positived
+    on a historical/narrative mention — see agent/runs/20261008-235732/engine-design.log,
+    where Claude completed successfully and said so, but mentioned in passing that a
+    *past Codex review* had BLOCKED. Whether Claude itself is currently blocked is
+    decided separately, from an explicit STATUS: contract — see parse_claude_status()."""
     denials = response.get('permission_denials') or []
     if denials:
         described = sorted({describe_denial(d) for d in denials})
         return f"Claude ({label}) was denied permission to: {', '.join(described)}"
     if response.get('is_error') or response.get('subtype') != 'success':
         return f"Claude ({label}) did not complete successfully (subtype={response.get('subtype')!r})"
-    if 'BLOCKED' in response.get('result', ''):
-        return f"Claude ({label}) reported BLOCKED"
     return None
+
+
+# Appended to every prompt sent to the Claude subprocess (see claude()) so every phase —
+# design, implement, buildfix, fix, handoff — is asked for the same machine-parsed
+# completion contract, instead of the controller guessing a genuine blocker from
+# free-form narrative. Markdown emphasis (*, _, `) around the label/value is tolerated;
+# the line's actual format is specified explicitly so a compliant response is simple.
+STATUS_CONTRACT_INSTRUCTION = (
+    "\n\nEnd your reply with exactly one status line, after a blank line, in this exact "
+    "format and nothing else on that line: `STATUS: OK` if nothing currently blocks this "
+    "phase, or `STATUS: BLOCKED` followed on the next line by `REASON: <one-sentence "
+    "reason>` if something outside your available tools/scope currently prevents "
+    "completing this phase. STATUS reports only your own present ability to finish this "
+    "phase right now — never a past review's verdict, a historical event, another "
+    "agent's status, or something you merely discuss in passing. Mentioning the word "
+    "\"blocked\" anywhere else in your narrative does not set this status; only the "
+    "STATUS: line itself does."
+)
+
+_STATUS_LINE = re.compile(r'(?im)^[\s*_`]*STATUS[\s*_`]*:[\s*_`]*(OK|BLOCKED)[\s*_`]*$')
+_REASON_LINE = re.compile(r'(?im)^[\s*_`]*REASON[\s*_`]*:[\s*_`]*(.+?)[\s*_`]*$')
+
+
+def parse_claude_status(text, label):
+    """Parse the STATUS:/REASON: completion contract out of a Claude response's result
+    text. Returns (status, reason, narrative) where status is 'OK' or 'BLOCKED', reason
+    is None for OK or the one-sentence reason for BLOCKED, and narrative is the response
+    text with the contract line(s) removed (so callers that store/display the response —
+    e.g. the engine-design capture into docs/decisions/3D_ENGINE_EVALUATION.md, or
+    log_handoff_entry's implementation-claim excerpt — don't carry the raw contract
+    markup). Raises StatusContractError if the contract is missing, duplicated, or
+    BLOCKED without a reason — those are surfaced as their own distinct failure, never
+    silently treated as OK or as a genuine blocker."""
+    matches = list(_STATUS_LINE.finditer(text))
+    if not matches:
+        raise StatusContractError(f'Claude ({label}) response did not include a STATUS: line')
+    if len(matches) > 1:
+        raise StatusContractError(f'Claude ({label}) response included more than one STATUS: line')
+    status = matches[0].group(1).upper()
+    narrative = (text[:matches[0].start()] + text[matches[0].end():]).strip()
+    if status == 'OK':
+        return 'OK', None, narrative
+    reasons = _REASON_LINE.findall(text)
+    if not reasons or not reasons[-1].strip():
+        raise StatusContractError(f'Claude ({label}) reported STATUS: BLOCKED without a REASON: line')
+    reason = reasons[-1].strip()
+    narrative = _REASON_LINE.sub('', narrative).strip()
+    return 'BLOCKED', reason, narrative
 
 
 DYNAMIC_VERSION_PATTERN = re.compile(r'["\']([^"\']*\+[^"\']*|latest\.release|latest\.integration)["\']')
@@ -511,9 +570,9 @@ class Loop:
         tools = 'Read,Glob,Grep' if readonly else 'Read,Glob,Grep,Edit,Write'
         # Restricted mode confines file tools to the workspace. No shell, plugins or MCP.
         settings = {'disableAllHooks': True, 'permissions': {'deny': build_deny_list(extra_paths)}}
-        argv = ['claude', '-p', prompt, '--restricted', '--safe-mode', '--permission-mode', 'dontAsk',
-                '--permission-prompts', 'none', '--tools', tools, '--allowedTools', tools,
-                '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
+        argv = ['claude', '-p', prompt + STATUS_CONTRACT_INSTRUCTION, '--restricted', '--safe-mode',
+                '--permission-mode', 'dontAsk', '--permission-prompts', 'none', '--tools', tools,
+                '--allowedTools', tools, '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
                 '--settings', json.dumps(settings), '--no-session-persistence', '--output-format', 'json',
                 '--max-budget-usd', str(self.args.claude_budget)]
         self.command(argv, label, timeout=900)
@@ -521,8 +580,15 @@ class Loop:
         reason = claude_failure_reason(response, label)
         if reason:
             raise RuntimeError(f'{reason} — see {self.run / (label + ".log")}')
+        log_path = self.run / (label + '.log')
+        try:
+            status, blocked_reason, narrative = parse_claude_status(response.get('result', ''), label)
+        except StatusContractError as exc:
+            raise RuntimeError(f'{exc} — see {log_path}') from exc
+        if status == 'BLOCKED':
+            raise RuntimeError(f'Claude ({label}) reported a current blocker: {blocked_reason} — see {log_path}')
         self.verify_scope(extra_paths)
-        self.last_implementation_claim = response.get('result', '')
+        self.last_implementation_claim = narrative
         return self.last_implementation_claim
 
     def gates(self, milestone, label):
@@ -634,7 +700,8 @@ class Loop:
         if not milestone.controller_only:
             self.claude(context + 'Implement the current task. The orchestrator runs checks after you finish. '
                         'Only edit app source/resources/tests' + (' plus the exact extra files named in your '
-                        'task brief' if extra else '') + '. Report BLOCKED if needed.',
+                        'task brief' if extra else '') + '. Use your STATUS: contract to report a genuine '
+                        'current blocker if one exists.',
                         milestone.key + '-implement', extra_paths=extra)
         build_attempts = 0
         review_round = 0

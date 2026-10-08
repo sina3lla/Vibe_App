@@ -601,7 +601,7 @@ class RealGitCheckpointTests(unittest.TestCase):
         controller = self._controller()
         controller.args = SimpleNamespace(claude_budget=3.0)
         (self.repo / 'app/build.gradle.kts').write_text('// dependency added\n')
-        response = {'subtype': 'success', 'is_error': False, 'permission_denials': [], 'result': 'done'}
+        response = {'subtype': 'success', 'is_error': False, 'permission_denials': [], 'result': 'done\n\nSTATUS: OK'}
         (controller.run / 'handoff.log').write_text(json.dumps(response))
         with patch.object(controller, 'command'):
             controller.claude('prompt', 'handoff', readonly=True, extra_paths=('app/build.gradle.kts',))
@@ -811,14 +811,19 @@ class PermissionDenyListTests(unittest.TestCase):
         self.assertIn('/Users/lelu', reason)
         self.assertNotIn('Glob(?)', reason)
 
-    def test_claude_failure_reason_distinguishes_error_subtype_from_blocked(self):
+    def test_claude_failure_reason_flags_non_success_subtype(self):
         error_reason = loop.claude_failure_reason(
             {'is_error': True, 'subtype': 'error', 'permission_denials': [], 'result': ''}, 'core-implement')
         self.assertIn('did not complete successfully', error_reason)
-        blocked_reason = loop.claude_failure_reason(
+
+    def test_claude_failure_reason_no_longer_substring_matches_blocked(self):
+        # Regression for agent/runs/20261008-235732/engine-design.log: this function
+        # used to substring-search the whole result text for 'BLOCKED' and misfire on a
+        # historical/narrative mention. It must now be silent on infra-level grounds —
+        # genuine-blocker detection lives in parse_claude_status()'s explicit contract.
+        self.assertIsNone(loop.claude_failure_reason(
             {'is_error': False, 'subtype': 'success', 'permission_denials': [], 'result': 'BLOCKED: no backend'},
-            'account-implement')
-        self.assertIn('BLOCKED', blocked_reason)
+            'account-implement'))
 
     def test_claude_failure_reason_is_none_on_success(self):
         self.assertIsNone(loop.claude_failure_reason(
@@ -834,6 +839,190 @@ class PermissionDenyListTests(unittest.TestCase):
     def test_redact_leaves_ordinary_build_output_alone(self):
         text = '> Task :app:compileDebugKotlin\nBUILD SUCCESSFUL in 4s'
         self.assertEqual(loop.redact(text), text)
+
+
+# A verbatim excerpt of the actual saved response from
+# agent/runs/20261008-235732/engine-design.log — Claude completed successfully
+# (is_error=False, subtype=success, permission_denials=[]) and explicitly said "I have
+# everything needed to give the recommendation," but mentioned in passing that a past
+# Codex review had BLOCKED. The old substring check misread that as Claude's own status.
+REAL_HISTORICAL_BLOCKED_MENTION = (
+    "Confirmed: the engine milestone's `extra_paths` already permit editing exactly "
+    "`app/build.gradle.kts` and `gradle/libs.versions.toml`, which is all adding "
+    "`filamat-android` requires. I have everything needed to give the recommendation.\n\n"
+    "## Recommendation\n\n**Keep `com.google.android.filament:filament-android` "
+    "(already pinned) as the engine, and add `com.google.android.filament:filamat-android:"
+    "1.56.0` as the one additional same-family dependency needed to compile a real "
+    "`Material` so `RenderableManager` can draw actual native geometry instead of the "
+    "current skybox-only scene.**\n\nThis is not a new idea to evaluate from scratch — "
+    "it's the same conclusion `docs/decisions/3D_ENGINE_EVALUATION.md` already reached... "
+    "exactly the gap `engine-1-review.json` BLOCKED on. That review is **not** moot; the "
+    "fix it asked for hasn't landed yet, and `agent/runs/STATUS.md` shows a newer run "
+    "with `engine` still `in_progress`."
+)
+
+
+class StatusContractTests(unittest.TestCase):
+    """Regression coverage for agent/runs/20261008-235732: Claude completed engine-design
+    successfully with no permission denials and said so plainly, but the controller
+    stopped anyway because claude_failure_reason() substring-searched the whole response
+    for the word BLOCKED and found one in a historical reference to a past Codex review.
+    parse_claude_status() replaces that with an explicit STATUS:/REASON: contract."""
+
+    def test_real_saved_response_is_not_an_infra_failure(self):
+        response = {'is_error': False, 'subtype': 'success', 'permission_denials': [],
+                    'result': REAL_HISTORICAL_BLOCKED_MENTION}
+        self.assertIsNone(loop.claude_failure_reason(response, 'engine-design'))
+
+    def test_real_saved_response_has_no_status_contract_and_is_rejected_as_missing(self):
+        # This real response predates the STATUS: contract, so it has no such line.
+        # That must be reported as its own distinct 'missing contract' failure — not
+        # silently accepted as OK, and (the actual regression) never misread as BLOCKED.
+        with self.assertRaises(loop.StatusContractError) as ctx:
+            loop.parse_claude_status(REAL_HISTORICAL_BLOCKED_MENTION, 'engine-design')
+        self.assertIn('STATUS', str(ctx.exception))
+        self.assertNotIn('reported a current blocker', str(ctx.exception))
+
+    def test_historical_blocked_mention_with_proper_contract_parses_as_ok(self):
+        text = REAL_HISTORICAL_BLOCKED_MENTION + '\n\nSTATUS: OK'
+        status, reason, narrative = loop.parse_claude_status(text, 'engine-design')
+        self.assertEqual(status, 'OK')
+        self.assertIsNone(reason)
+        # The historical mention is narrative content and is preserved, not scrubbed —
+        # only the contract line itself is removed.
+        self.assertIn('BLOCKED on', narrative)
+        self.assertNotIn('STATUS:', narrative)
+
+    def test_negated_mention_with_ok_status_parses_as_ok(self):
+        text = "Nothing is blocking me; this is not a blocked state.\n\nSTATUS: OK"
+        status, reason, narrative = loop.parse_claude_status(text, 'label')
+        self.assertEqual(status, 'OK')
+        self.assertIsNone(reason)
+
+    def test_genuine_current_blocker_with_reason_is_detected(self):
+        text = "I cannot proceed without more information.\n\nSTATUS: BLOCKED\nREASON: FEELY_API_BASE is required but unset."
+        status, reason, narrative = loop.parse_claude_status(text, 'account-implement')
+        self.assertEqual(status, 'BLOCKED')
+        self.assertEqual(reason, 'FEELY_API_BASE is required but unset.')
+        self.assertNotIn('REASON:', narrative)
+        self.assertNotIn('STATUS:', narrative)
+
+    def test_markdown_emphasis_around_the_contract_is_tolerated(self):
+        text = "All done.\n\n**STATUS:** OK"
+        status, _, _ = loop.parse_claude_status(text, 'label')
+        self.assertEqual(status, 'OK')
+
+    def test_missing_status_line_is_rejected(self):
+        with self.assertRaisesRegex(loop.StatusContractError, 'STATUS'):
+            loop.parse_claude_status('I finished the task with no issues.', 'label')
+
+    def test_multiple_status_lines_are_rejected_as_ambiguous(self):
+        text = "STATUS: OK\n\nOn second thought...\n\nSTATUS: BLOCKED\nREASON: actually no."
+        with self.assertRaisesRegex(loop.StatusContractError, 'more than one'):
+            loop.parse_claude_status(text, 'label')
+
+    def test_blocked_without_a_reason_line_is_rejected(self):
+        with self.assertRaisesRegex(loop.StatusContractError, 'REASON'):
+            loop.parse_claude_status('STATUS: BLOCKED', 'label')
+
+    def test_blocked_with_an_empty_reason_is_rejected(self):
+        with self.assertRaisesRegex(loop.StatusContractError, 'REASON'):
+            loop.parse_claude_status('STATUS: BLOCKED\nREASON:   ', 'label')
+
+    def test_unrecognized_status_value_is_treated_as_missing(self):
+        with self.assertRaisesRegex(loop.StatusContractError, 'STATUS'):
+            loop.parse_claude_status('STATUS: MAYBE', 'label')
+
+
+class ClaudeStatusIntegrationTests(unittest.TestCase):
+    """claude()'s end-to-end handling of the contract, against a real temporary Git
+    repo (like RealGitCheckpointTests) so verify_scope() runs for real on the OK path."""
+
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.repo = Path(self.tempdir.name)
+        subprocess.run(['git', 'init', '-q'], cwd=self.repo, check=True)
+        subprocess.run(['git', 'config', 'user.email', 't@example.com'], cwd=self.repo, check=True)
+        subprocess.run(['git', 'config', 'user.name', 'T'], cwd=self.repo, check=True)
+        (self.repo / 'app/src/main').mkdir(parents=True)
+        (self.repo / 'agent').mkdir()
+        (self.repo / 'app/src/main/Placeholder.kt').write_text('// placeholder\n')
+        (self.repo / '.gitignore').write_text('/agent/runs/\n')
+        subprocess.run(['git', 'add', '.'], cwd=self.repo, check=True)
+        subprocess.run(['git', 'commit', '-q', '-m', 'initial'], cwd=self.repo, check=True)
+        self._root_patch = patch.object(loop, 'ROOT', self.repo)
+        self._root_patch.start()
+
+    def tearDown(self):
+        self._root_patch.stop()
+        self.tempdir.cleanup()
+
+    def _controller(self):
+        controller = object.__new__(loop.Loop)
+        controller.run = self.repo / 'agent/runs/testrun'
+        controller.run.mkdir(parents=True)
+        controller.args = SimpleNamespace(claude_budget=3.0)
+        initial = loop.snapshot()
+        controller.scope_baseline = initial
+        controller.checkpoint_baseline = initial
+        controller.head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.repo)
+        return controller
+
+    def _respond(self, controller, label, result_text, **overrides):
+        response = {'subtype': 'success', 'is_error': False, 'permission_denials': [], 'result': result_text}
+        response.update(overrides)
+        (controller.run / (label + '.log')).write_text(json.dumps(response))
+
+    def test_claude_includes_the_status_contract_request_in_every_prompt(self):
+        # Covers every phase uniformly: claude() appends the instruction itself, so
+        # design/implement/buildfix/fix/handoff (readonly=True or False) all get it
+        # from this single code path rather than needing it copied into five prompts.
+        controller = self._controller()
+        self._respond(controller, 'any-label', 'done.\n\nSTATUS: OK')
+        for readonly in (True, False):
+            with patch.object(controller, 'command') as command:
+                controller.claude('base prompt', 'any-label', readonly=readonly)
+            sent_prompt = command.call_args.args[0][2]  # argv[2] is the -p argument's value
+            self.assertIn('STATUS: OK', sent_prompt)
+            self.assertIn('STATUS: BLOCKED', sent_prompt)
+            self.assertIn('REASON:', sent_prompt)
+            self.assertIn('base prompt', sent_prompt)
+
+    def test_claude_returns_narrative_with_contract_stripped_on_ok(self):
+        controller = self._controller()
+        self._respond(controller, 'engine-design', REAL_HISTORICAL_BLOCKED_MENTION + '\n\nSTATUS: OK')
+        with patch.object(controller, 'command'):
+            result = controller.claude('prompt', 'engine-design', readonly=True)
+        self.assertIn('BLOCKED on', result)  # historical narrative preserved
+        self.assertNotIn('STATUS:', result)
+
+    def test_claude_raises_with_reason_on_genuine_blocker(self):
+        controller = self._controller()
+        self._respond(controller, 'account-implement',
+                      'Cannot proceed.\n\nSTATUS: BLOCKED\nREASON: FEELY_API_BASE is unset.')
+        with patch.object(controller, 'command'):
+            with self.assertRaisesRegex(RuntimeError, 'FEELY_API_BASE is unset'):
+                controller.claude('prompt', 'account-implement')
+
+    def test_claude_raises_distinctly_on_missing_status_contract(self):
+        # The actual regression: a response with no contract (here, containing a
+        # historical BLOCKED mention) must be rejected as a malformed contract, never
+        # silently passed through and never misreported as a genuine current blocker.
+        controller = self._controller()
+        self._respond(controller, 'engine-design', REAL_HISTORICAL_BLOCKED_MENTION)
+        with patch.object(controller, 'command'):
+            with self.assertRaises(RuntimeError) as ctx:
+                controller.claude('prompt', 'engine-design', readonly=True)
+        self.assertIn('STATUS', str(ctx.exception))
+        self.assertNotIn('reported a current blocker', str(ctx.exception))
+
+    def test_permission_denial_is_reported_before_status_is_even_parsed(self):
+        controller = self._controller()
+        self._respond(controller, 'engine-implement', 'irrelevant text, no contract either',
+                      permission_denials=[{'tool_name': 'Edit', 'tool_input': {'file_path': '/x'}}])
+        with patch.object(controller, 'command'):
+            with self.assertRaisesRegex(RuntimeError, 'denied permission'):
+                controller.claude('prompt', 'engine-implement')
 
 
 class DynamicVersionGuardTests(unittest.TestCase):
